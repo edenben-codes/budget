@@ -13,13 +13,27 @@
 <body>
   <div class="container">
 
-    <!-- כותרת עליונה -->
+    <!-- כותרת עליונה + כפתורי הוספה -->
     <header class="header">
-      <h1>💰 ניהול תקציב אישי</h1>
-      <p>מעקב פשוט אחרי ההכנסות וההוצאות שלך</p>
+      <div>
+        <h1>💰 ניהול תקציב אישי</h1>
+        <p>מעקב פשוט אחרי ההכנסות וההוצאות שלך</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="btn-add income" id="add-income">+ הכנסה</button>
+        <button type="button" class="btn-add expense" id="add-expense">+ הוצאה</button>
+      </div>
     </header>
 
-    <!-- כרטיסי סיכום -->
+    <!-- בחירת תקופה – קובעת את הסיכום, את הגרפים ואת התקציב -->
+    <div class="period-bar">
+      <label class="period-picker" id="month-picker">
+        <span>📅 תקופה:</span>
+        <select id="chart-month"></select>
+      </label>
+    </div>
+
+    <!-- כרטיסי סיכום (לפי התקופה שנבחרה) -->
     <section class="summary">
       <div class="card card-income">
         <span class="card-label">סך הכנסות</span>
@@ -35,48 +49,17 @@
       </div>
     </section>
 
-    <div class="main-grid">
-      <!-- טופס הוספת תנועה -->
-      <section class="panel">
-        <h2 id="form-title">הוספת תנועה</h2>
-        <form id="transaction-form">
+    <!-- לשוניות (Tabs). role ו-aria עוזרים לקוראי מסך להבין שאלה לשוניות -->
+    <div class="tabs-bar">
+      <nav class="tabs" role="tablist" aria-label="אזורי האפליקציה">
+        <button type="button" class="tab" role="tab" id="tab-btn-transactions" data-tab="transactions" aria-controls="tab-transactions" aria-selected="true">📋 תנועות</button>
+        <button type="button" class="tab" role="tab" id="tab-btn-charts" data-tab="charts" aria-controls="tab-charts" aria-selected="false">📊 גרפים</button>
+        <button type="button" class="tab" role="tab" id="tab-btn-budget" data-tab="budget" aria-controls="tab-budget" aria-selected="false">🎯 תקציב</button>
+      </nav>
+    </div>
 
-          <!-- בחירת סוג: הכנסה או הוצאה -->
-          <div class="type-toggle">
-            <input type="radio" name="type" id="type-income" value="income" checked>
-            <label for="type-income">הכנסה</label>
-            <input type="radio" name="type" id="type-expense" value="expense">
-            <label for="type-expense">הוצאה</label>
-          </div>
-
-          <label class="field">
-            <span>תיאור</span>
-            <input type="text" id="description" placeholder="לדוגמה: משכורת, סופר..." required>
-          </label>
-
-          <label class="field">
-            <span>סכום (₪)</span>
-            <input type="number" id="amount" placeholder="0.00" min="0.01" step="0.01" required>
-          </label>
-
-          <label class="field">
-            <span>קטגוריה</span>
-            <select id="category" required></select>
-          </label>
-
-          <label class="field">
-            <span>תאריך</span>
-            <input type="date" id="date" required>
-          </label>
-
-          <button type="submit" class="btn-submit" id="submit-btn">הוסף תנועה</button>
-          <!-- כפתור ביטול – מוסתר (hidden) ומופיע רק במצב עריכה -->
-          <button type="button" class="btn-cancel" id="cancel-edit" hidden>ביטול עריכה</button>
-        </form>
-      </section>
-
-      <!-- טבלת תנועות -->
-      <section class="panel">
+      <!-- לשונית 1: טבלת תנועות -->
+      <section class="panel tab-panel" role="tabpanel" id="tab-transactions" aria-labelledby="tab-btn-transactions">
         <h2>תנועות אחרונות</h2>
 
         <!-- אזור חיפוש וסינון. הסינון משפיע רק על התצוגה, לא על הנתונים השמורים -->
@@ -132,17 +115,10 @@
           <p class="empty-message" id="empty-message">עדיין אין תנועות. הוסף את התנועה הראשונה שלך!</p>
         </div>
       </section>
-    </div>
 
-    <!-- אזור גרפים וניתוח נתונים. הגרפים נבנים ב-JavaScript מתוך התנועות -->
-    <section class="panel analytics">
-      <div class="analytics-header">
-        <h2>גרפים וניתוח</h2>
-        <label class="field month-picker">
-          <span>חודש להצגה</span>
-          <select id="chart-month"></select>
-        </label>
-      </div>
+    <!-- לשונית 2: גרפים וניתוח נתונים. הגרפים נבנים ב-JavaScript מתוך התנועות -->
+    <section class="panel analytics tab-panel" role="tabpanel" id="tab-charts" aria-labelledby="tab-btn-charts" hidden>
+      <h2>גרפים וניתוח</h2>
 
       <div class="charts-grid">
         <!-- גרף 1: הכנסות מול הוצאות -->
@@ -166,8 +142,8 @@
       </div>
     </section>
 
-    <!-- תקציב חודשי לפי קטגוריה. משתמש בחודש שנבחר באזור הגרפים -->
-    <section class="panel budgets">
+    <!-- לשונית 3: תקציב חודשי לפי קטגוריה -->
+    <section class="panel budgets tab-panel" role="tabpanel" id="tab-budget" aria-labelledby="tab-btn-budget" hidden>
       <h2>תקציב חודשי לפי קטגוריה</h2>
       <p class="chart-subtitle" id="budgets-subtitle"></p>
       <div class="budget-overview" id="budget-overview"></div>
@@ -175,6 +151,49 @@
     </section>
 
   </div>
+
+  <!-- חלון הוספה/עריכה של תנועה. הטופס זהה לטופס הקודם – רק עבר לתוך חלון -->
+  <dialog id="transaction-dialog" class="dialog form-dialog" aria-labelledby="form-title">
+    <div class="dialog-header">
+      <h2 id="form-title">הוספת תנועה</h2>
+      <button type="button" class="btn-close" id="close-dialog" aria-label="סגור">✕</button>
+    </div>
+    <form id="transaction-form">
+
+      <!-- בחירת סוג: הכנסה או הוצאה -->
+      <div class="type-toggle">
+        <input type="radio" name="type" id="type-income" value="income" checked>
+        <label for="type-income">הכנסה</label>
+        <input type="radio" name="type" id="type-expense" value="expense">
+        <label for="type-expense">הוצאה</label>
+      </div>
+
+      <label class="field">
+        <span>תיאור</span>
+        <input type="text" id="description" placeholder="לדוגמה: משכורת, סופר..." required>
+      </label>
+
+      <label class="field">
+        <span>סכום (₪)</span>
+        <input type="number" id="amount" placeholder="0.00" min="0.01" step="0.01" required>
+      </label>
+
+      <label class="field">
+        <span>קטגוריה</span>
+        <select id="category" required></select>
+      </label>
+
+      <label class="field">
+        <span>תאריך</span>
+        <input type="date" id="date" required>
+      </label>
+
+      <div class="dialog-actions">
+        <button type="submit" class="btn-submit" id="submit-btn">הוסף תנועה</button>
+        <button type="button" class="btn-cancel" id="cancel-edit">ביטול</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- חלון אישור מחיקה. <dialog> הוא אלמנט מובנה בדפדפן לחלונות קופצים -->
   <dialog id="confirm-dialog" class="dialog">

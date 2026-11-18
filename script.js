@@ -88,18 +88,28 @@ function updateCategoryOptions() {
 
 // ===== 4. הצגת הנתונים במסך =====
 
-// מחשבת ומציגה את סך ההכנסות, ההוצאות והיתרה
+// מחשבת ומציגה את סך ההכנסות, ההוצאות והיתרה – לפי התקופה שנבחרה למעלה
 function renderSummary() {
+  const period = getSelectedPeriod();
   let income = 0;
   let expense = 0;
 
   transactions.forEach(function (t) {
+    if (!matchesPeriod(t, period)) {
+      return; // תנועה מתקופה אחרת – מדלגים עליה
+    }
     if (t.type === 'income') {
       income += t.amount;
     } else {
       expense += t.amount;
     }
   });
+
+  // הכותרות של הכרטיסים מתאימות את עצמן לתקופה
+  const all = isAllPeriod(period);
+  document.querySelector('.card-income .card-label').textContent = all ? 'סך הכנסות' : 'הכנסות בחודש';
+  document.querySelector('.card-expense .card-label').textContent = all ? 'סך הוצאות' : 'הוצאות בחודש';
+  document.querySelector('.card-balance .card-label').textContent = all ? 'יתרה כוללת' : 'יתרה בחודש';
 
   const balance = income - expense;
 
@@ -194,6 +204,7 @@ function renderTable() {
 
 // מרעננת את כל המסך
 function render() {
+  updateMonthOptions(); // קודם מעדכנים את רשימת התקופות – כל השאר תלוי בה
   renderSummary();
   renderTable();
   renderCharts(); // הגרפים מתעדכנים יחד עם כל השאר
@@ -339,8 +350,8 @@ let editingId = null;
 
 const formTitle = document.getElementById('form-title');
 const submitBtn = document.getElementById('submit-btn');
-const cancelEditBtn = document.getElementById('cancel-edit');
-const formPanel = form.closest('.panel'); // הפאנל שעוטף את הטופס
+const cancelEditBtn = document.getElementById('cancel-edit'); // כפתור "ביטול" בחלון
+const transactionDialog = document.getElementById('transaction-dialog'); // החלון שמכיל את הטופס
 
 // תאריך היום בפורמט YYYY-MM-DD
 function getTodayString() {
@@ -377,13 +388,12 @@ function startEdit(transaction) {
   // 3. הממשק משתנה למצב עריכה
   formTitle.textContent = 'עריכת תנועה';
   submitBtn.textContent = 'שמור שינויים';
-  cancelEditBtn.hidden = false;
 
   renderTable(); // כדי להדגיש את השורה שבעריכה
 
-  // גוללים אל הטופס (חשוב בטלפון, שם הטופס רחוק מהטבלה)
-  formPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  descriptionInput.focus({ preventScroll: true });
+  // פותחים את החלון עם הטופס המלא
+  transactionDialog.showModal();
+  descriptionInput.focus();
 }
 
 // יוצאים ממצב עריכה וחוזרים לטופס הוספה ריק
@@ -391,7 +401,6 @@ function exitEditMode() {
   editingId = null;
   formTitle.textContent = 'הוספת תנועה';
   submitBtn.textContent = 'הוסף תנועה';
-  cancelEditBtn.hidden = true;
 
   descriptionInput.value = '';
   amountInput.value = '';
@@ -423,9 +432,41 @@ function saveEdit() {
   render();
 }
 
-cancelEditBtn.addEventListener('click', function () {
-  exitEditMode();
-  renderTable(); // מסירים את ההדגשה מהשורה
+// פותחת את החלון להוספת תנועה חדשה, עם הסוג שנבחר (הכנסה/הוצאה)
+function openAddDialog(type) {
+  exitEditMode(); // מתחילים מטופס ריק
+  document.getElementById('type-' + type).checked = true;
+  updateCategoryOptions();
+  transactionDialog.showModal();
+  descriptionInput.focus();
+}
+
+document.getElementById('add-income').addEventListener('click', function () {
+  openAddDialog('income');
+});
+document.getElementById('add-expense').addEventListener('click', function () {
+  openAddDialog('expense');
+});
+
+// סוגרת את החלון בלי לשמור. אם היינו בעריכה – מבטלים אותה מיד ומסירים את ההדגשה
+function closeTransactionDialog() {
+  if (editingId !== null) {
+    exitEditMode();
+    renderTable();
+  }
+  transactionDialog.close();
+}
+
+// "ביטול" ו-✕ סוגרים את החלון בלי לשמור
+cancelEditBtn.addEventListener('click', closeTransactionDialog);
+document.getElementById('close-dialog').addEventListener('click', closeTransactionDialog);
+
+// מקש Esc: הדפדפן סוגר את החלון בעצמו, ואירוע cancel מגיע לפני הסגירה – כאן מבטלים את העריכה
+transactionDialog.addEventListener('cancel', function () {
+  if (editingId !== null) {
+    exitEditMode();
+    renderTable();
+  }
 });
 
 // ===== 7. אירועים (Events) – תגובה לפעולות המשתמש =====
@@ -443,6 +484,7 @@ form.addEventListener('submit', function (event) {
   // במצב עריכה – מעדכנים את התנועה הקיימת במקום ליצור חדשה
   if (editingId !== null) {
     saveEdit();
+    transactionDialog.close();
     return;
   }
 
@@ -460,10 +502,8 @@ form.addEventListener('submit', function (event) {
   saveTransactions(); // שמירה אוטומטית
   render();
 
-  // ניקוי השדות לקראת התנועה הבאה (התאריך והסוג נשארים)
-  descriptionInput.value = '';
-  amountInput.value = '';
-  descriptionInput.focus();
+  // סוגרים את החלון – התנועה כבר מופיעה בטבלה
+  transactionDialog.close();
 });
 
 // ===== 8. גרפים וניתוח נתונים =====
@@ -520,51 +560,97 @@ function getPreviousMonths(key, count) {
   return result;
 }
 
-// סכום ההכנסות וההוצאות בחודש מסוים
+// ----- תקופה: חודש מסוים או "כל התקופה" -----
+const ALL_PERIOD = 'all';         // הערך של האפשרות "כל התקופה"
+const MONTHS_IN_ALL_CHART = 12;   // בתצוגת "כל התקופה" – כמה חודשים אחרונים בגרף העמודות
+
+function isAllPeriod(key) {
+  return key === ALL_PERIOD;
+}
+
+// התקופה שנבחרה כרגע (לפני שהרשימה מתמלאת – החודש הנוכחי)
+function getSelectedPeriod() {
+  return chartMonth.value || getCurrentMonthKey();
+}
+
+// "2026-11" → "נובמבר 2026", ו-"all" → "כל התקופה"
+function formatPeriod(key) {
+  return isAllPeriod(key) ? 'כל התקופה' : formatMonthLong(key);
+}
+
+// האם תנועה שייכת לתקופה? ב"כל התקופה" – כל תנועה שייכת
+function matchesPeriod(transaction, key) {
+  return isAllPeriod(key) || getMonthKey(transaction.date) === key;
+}
+
+// כל החודשים שיש בהם תנועות + החודש הנוכחי, ממוינים מהישן לחדש
+function getAllMonthKeys() {
+  // Set שומר כל ערך פעם אחת בלבד – כך אין חודשים כפולים
+  const monthSet = new Set(transactions.map(function (t) {
+    return getMonthKey(t.date);
+  }));
+  monthSet.add(getCurrentMonthKey());
+  return [...monthSet].sort();
+}
+
+// סכום ההכנסות וההוצאות בתקופה (חודש מסוים או כל התקופה)
 function getMonthTotals(key) {
   const totals = { income: 0, expense: 0 };
   transactions.forEach(function (t) {
-    if (getMonthKey(t.date) === key) {
+    if (matchesPeriod(t, key)) {
       totals[t.type] += t.amount;
     }
   });
   return totals;
 }
 
-// ממלאת את רשימת החודשים: כל חודש שיש בו תנועות + החודש הנוכחי
+// ממלאת את רשימת התקופות: "כל התקופה" + כל חודש שיש בו תנועות + החודש הנוכחי
 function updateMonthOptions() {
   const previous = chartMonth.value;
   const current = getCurrentMonthKey();
 
-  // Set שומר כל ערך פעם אחת בלבד – כך אין חודשים כפולים
-  const monthSet = new Set(transactions.map(function (t) {
-    return getMonthKey(t.date);
-  }));
-  monthSet.add(current);
-
   // מיון מהחדש לישן
-  const months = [...monthSet].sort().reverse();
+  const months = getAllMonthKeys().reverse();
 
   chartMonth.innerHTML = '';
-  months.forEach(function (key) {
-    const option = createEl('option', null, formatMonthLong(key));
+  [ALL_PERIOD, ...months].forEach(function (key) {
+    const option = createEl('option', null, formatPeriod(key));
     option.value = key;
     chartMonth.appendChild(option);
   });
 
-  // אם החודש שנבחר קודם עדיין ברשימה – נשארים עליו, אחרת חוזרים לחודש הנוכחי
-  chartMonth.value = months.includes(previous) ? previous : current;
+  // אם התקופה שנבחרה קודם עדיין ברשימה – נשארים עליה, אחרת חוזרים לחודש הנוכחי
+  chartMonth.value = (previous === ALL_PERIOD || months.includes(previous)) ? previous : current;
 }
 
-// גרף 1: עמודות הכנסות מול הוצאות ל-6 חודשים
+// גרף 1: עמודות הכנסות מול הוצאות
+// חודש מסוים → 6 החודשים שמסתיימים בו. "כל התקופה" → עד 12 החודשים האחרונים שיש בהם נתונים
 function renderIncomeExpenseChart(selectedKey) {
   const container = document.getElementById('income-expense-chart');
   container.innerHTML = '';
-  document.getElementById('bars-subtitle').textContent =
-    MONTHS_IN_CHART + ' החודשים שמסתיימים ב' + formatMonthLong(selectedKey);
+
+  let monthKeys;
+  if (isAllPeriod(selectedKey)) {
+    const allMonths = getAllMonthKeys();
+    const first = allMonths[0];
+    const last = allMonths[allMonths.length - 1];
+    // כמה חודשים יש מהחודש הראשון עד האחרון (כולל חודשים ריקים באמצע)
+    const [y1, m1] = first.split('-').map(Number);
+    const [y2, m2] = last.split('-').map(Number);
+    const span = (y2 - y1) * 12 + (m2 - m1) + 1;
+    // לפחות 6 עמודות (כדי שהגרף לא ייראה ריק) ולכל היותר 12 (כדי שיהיה קריא)
+    const count = Math.min(Math.max(span, MONTHS_IN_CHART), MONTHS_IN_ALL_CHART);
+    monthKeys = getPreviousMonths(last, count);
+    document.getElementById('bars-subtitle').textContent =
+      'כל התקופה – ' + monthKeys.length + ' החודשים האחרונים';
+  } else {
+    monthKeys = getPreviousMonths(selectedKey, MONTHS_IN_CHART);
+    document.getElementById('bars-subtitle').textContent =
+      MONTHS_IN_CHART + ' החודשים שמסתיימים ב' + formatMonthLong(selectedKey);
+  }
 
   // map הופך כל מפתח חודש לאובייקט עם הסכומים שלו
-  const data = getPreviousMonths(selectedKey, MONTHS_IN_CHART).map(function (key) {
+  const data = monthKeys.map(function (key) {
     const totals = getMonthTotals(key);
     return { key: key, income: totals.income, expense: totals.expense };
   });
@@ -624,10 +710,11 @@ function renderMonthStats(selectedKey) {
   container.innerHTML = '';
   const totals = getMonthTotals(selectedKey);
   const diff = totals.income - totals.expense;
+  const all = isAllPeriod(selectedKey);
 
   const items = [
-    ['הכנסות בחודש', formatMoney(totals.income)],
-    ['הוצאות בחודש', formatMoney(totals.expense)],
+    [all ? 'סך הכנסות' : 'הכנסות בחודש', formatMoney(totals.income)],
+    [all ? 'סך הוצאות' : 'הוצאות בחודש', formatMoney(totals.expense)],
     ['הפרש', (diff < 0 ? '-' : '') + formatMoney(Math.abs(diff))],
   ];
   items.forEach(function (item) {
@@ -641,12 +728,12 @@ function renderMonthStats(selectedKey) {
 function renderCategoryChart(selectedKey) {
   const container = document.getElementById('category-chart');
   container.innerHTML = '';
-  document.getElementById('categories-subtitle').textContent = formatMonthLong(selectedKey);
+  document.getElementById('categories-subtitle').textContent = formatPeriod(selectedKey);
 
   // אובייקט שסוכם לכל קטגוריה את ההוצאות שלה: { "מזון": 600, "דלק": 300 }
   const byCategory = {};
   transactions.forEach(function (t) {
-    if (t.type === 'expense' && getMonthKey(t.date) === selectedKey) {
+    if (t.type === 'expense' && matchesPeriod(t, selectedKey)) {
       byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
     }
   });
@@ -657,7 +744,8 @@ function renderCategoryChart(selectedKey) {
   });
 
   if (entries.length === 0) {
-    container.appendChild(createEl('p', 'chart-empty', 'אין הוצאות בחודש הזה.'));
+    container.appendChild(createEl('p', 'chart-empty',
+      isAllPeriod(selectedKey) ? 'עדיין אין הוצאות.' : 'אין הוצאות בחודש הזה.'));
     return;
   }
 
@@ -687,7 +775,7 @@ function renderCategoryChart(selectedKey) {
     list.appendChild(row);
   });
 
-  const totalRow = createEl('div', 'cat-total', 'סך הוצאות בחודש');
+  const totalRow = createEl('div', 'cat-total', isAllPeriod(selectedKey) ? 'סך כל ההוצאות' : 'סך הוצאות בחודש');
   totalRow.appendChild(createEl('strong', null, formatMoney(total)));
 
   container.append(list, totalRow);
@@ -702,8 +790,9 @@ function renderCharts() {
   renderCategoryChart(selectedKey);
 }
 
-// בחירת חודש אחר – מציגים מחדש רק את הגרפים
+// בחירת תקופה אחרת – מעדכנים את הגרפים ואת כרטיסי הסיכום למעלה
 chartMonth.addEventListener('change', renderCharts);
+chartMonth.addEventListener('change', renderSummary);
 
 // ===== 9. תקציב חודשי לפי קטגוריה =====
 // התקציבים נשמרים בנפרד מהתנועות, תחת מפתח משלהם.
@@ -829,9 +918,12 @@ function renderBudgetOverview(spentByCategory) {
 
 // בונה כרטיס תקציב לכל קטגוריית הוצאה
 function renderBudgets() {
-  const key = chartMonth.value;
-  document.getElementById('budgets-subtitle').textContent =
-    'ההוצאות של ' + formatMonthLong(key) + ' (החודש שנבחר באזור הגרפים). התקציב חל על כל חודש.';
+  // התקציב הוא חודשי – ב"כל התקופה" מציגים את החודש הנוכחי
+  const selected = getSelectedPeriod();
+  const key = isAllPeriod(selected) ? getCurrentMonthKey() : selected;
+  document.getElementById('budgets-subtitle').textContent = isAllPeriod(selected)
+    ? 'התקציב הוא חודשי, ולכן מוצג החודש הנוכחי (' + formatMonthLong(key) + '). לחודש אחר – בחר אותו ב"תקופה" למעלה.'
+    : 'ההוצאות של ' + formatMonthLong(key) + '. התקציב חל על כל חודש.';
 
   const spentByCategory = getExpensesByCategory(key);
   renderBudgetOverview(spentByCategory);
@@ -899,7 +991,63 @@ function renderBudgets() {
 // בחירת חודש אחר באזור הגרפים – מעדכנת גם את התקציבים
 chartMonth.addEventListener('change', renderBudgets);
 
+// ===== 9.5 לשוניות (Tabs) =====
+const TAB_KEY = 'budget-active-tab'; // זוכרים את הלשונית האחרונה (נוחות בלבד)
+const tabButtons = document.querySelectorAll('.tab');
+
+// מציגה לשונית אחת ומסתירה את השאר
+function showTab(name) {
+  tabButtons.forEach(function (btn) {
+    const isActive = btn.dataset.tab === name; // data-tab ב-HTML → dataset.tab ב-JS
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    btn.tabIndex = isActive ? 0 : -1;
+    document.getElementById('tab-' + btn.dataset.tab).hidden = !isActive;
+  });
+
+  try {
+    localStorage.setItem(TAB_KEY, name);
+  } catch (error) {
+    // אם האחסון חסום – פשוט לא זוכרים, הכול ממשיך לעבוד
+  }
+}
+
+tabButtons.forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    showTab(btn.dataset.tab);
+  });
+});
+
+// ניווט במקלדת: חצים ימינה/שמאלה עוברים בין הלשוניות (בעברית ← הוא "הבא")
+document.querySelector('.tabs').addEventListener('keydown', function (event) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+    return;
+  }
+  const list = [...tabButtons];
+  const current = list.indexOf(document.activeElement);
+  if (current === -1) {
+    return;
+  }
+  const step = event.key === 'ArrowLeft' ? 1 : -1;
+  const next = list[(current + step + list.length) % list.length];
+  showTab(next.dataset.tab);
+  next.focus();
+});
+
+// הלשונית שנפתחת בהתחלה: האחרונה שנבחרה, או "תנועות"
+function getSavedTab() {
+  try {
+    const saved = localStorage.getItem(TAB_KEY);
+    if (saved === 'transactions' || saved === 'charts' || saved === 'budget') {
+      return saved;
+    }
+  } catch (error) {
+    // מתעלמים
+  }
+  return 'transactions';
+}
+
 // ===== 10. הפעלה ראשונית =====
+showTab(getSavedTab());
 updateFilterCategoryOptions();
 // תאריך היום כברירת מחדל (לפי השעון המקומי, בפורמט YYYY-MM-DD)
 const today = new Date();
