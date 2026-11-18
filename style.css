@@ -1,0 +1,673 @@
+/* ===== משתני צבע (CSS Variables) – מגדירים פעם אחת ומשתמשים בכל מקום ===== */
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --primary: #4f46e5;
+  --income: #059669;
+  --income-bg: #ecfdf5;
+  --expense: #dc2626;
+  --expense-bg: #fef2f2;
+  --radius: 14px;
+  --shadow: 0 4px 16px rgba(17, 24, 39, 0.06);
+}
+
+/* איפוס בסיסי: box-sizing מחשב גודל כולל ריפוד וגבול */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Rubik', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 16px;
+}
+
+/* ===== כותרת ===== */
+.header {
+  margin-bottom: 28px;
+}
+.header h1 {
+  font-size: 1.9rem;
+  font-weight: 700;
+}
+.header p {
+  color: var(--muted);
+}
+
+/* ===== כרטיסי סיכום – Grid של 3 עמודות ===== */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* פס צבעוני בצד ימין (בגלל RTL, "start" = ימין) */
+  border-inline-start: 5px solid var(--primary);
+}
+.card-label {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.card-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  direction: ltr;          /* מספרים נקראים משמאל לימין */
+  text-align: right;
+}
+.card-income  { border-inline-start-color: var(--income); }
+.card-income .card-value  { color: var(--income); }
+.card-expense { border-inline-start-color: var(--expense); }
+.card-expense .card-value { color: var(--expense); }
+
+/* ===== פריסה ראשית: טופס + טבלה ===== */
+.main-grid {
+  display: grid;
+  /* minmax(0, 1fr) מאפשר לעמודה להתכווץ – כך טבלה רחבה נגללת בתוך המסגרת ולא "דוחפת" את הדף */
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.panel {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+.panel h2 {
+  font-size: 1.2rem;
+  margin-bottom: 18px;
+}
+
+/* ===== טופס ===== */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.field input,
+.field select {
+  font: inherit;
+  color: var(--text);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+/* מתג הכנסה/הוצאה – מסתירים את כפתורי הרדיו ומעצבים את התוויות ככפתורים */
+.type-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 4px;
+}
+.type-toggle input {
+  display: none;
+}
+.type-toggle label {
+  text-align: center;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--muted);
+  transition: all 0.2s;
+}
+#type-income:checked + label {
+  background: var(--income);
+  color: #fff;
+}
+#type-expense:checked + label {
+  background: var(--expense);
+  color: #fff;
+}
+
+.btn-submit {
+  font: inherit;
+  font-weight: 500;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: opacity 0.2s;
+}
+.btn-submit:hover {
+  opacity: 0.9;
+}
+
+/* ===== חיפוש וסינון ===== */
+.filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+/* שדה החיפוש תופס את כל הרוחב */
+.filter-search {
+  grid-column: 1 / -1;
+}
+.filters-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 6px;
+}
+.results-count {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.btn-reset {
+  font: inherit;
+  font-size: 0.9rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.btn-reset:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* ===== טבלה ===== */
+.table-wrapper {
+  overflow-x: auto;
+  position: relative; /* כדי שאלמנטים עם position: absolute יישארו בתוך אזור הגלילה */
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  text-align: right;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+th {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+tbody tr:hover {
+  background: var(--bg);
+}
+.amount {
+  font-weight: 500;
+  direction: ltr;
+  text-align: right;
+}
+.amount.income  { color: var(--income); }
+.amount.expense { color: var(--expense); }
+
+.category-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+}
+
+/* כפתור מחיקה קטן בכל שורה */
+.btn-delete {
+  font: inherit;
+  font-size: 1rem;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: background 0.2s, color 0.2s;
+}
+.btn-delete:hover,
+.btn-delete:focus-visible {
+  background: var(--expense-bg);
+  color: var(--expense);
+  outline: none;
+}
+
+/* טקסט שמיועד רק לקוראי מסך (נגישות) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ===== חלון אישור ===== */
+.dialog {
+  margin: auto;
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: 0 20px 50px rgba(17, 24, 39, 0.25);
+  padding: 24px;
+  width: min(380px, calc(100% - 32px));
+  color: var(--text);
+  font-family: inherit;
+}
+/* הרקע הכהה שמאחורי החלון */
+.dialog::backdrop {
+  background: rgba(17, 24, 39, 0.45);
+}
+.dialog h3 {
+  font-size: 1.15rem;
+  margin-bottom: 10px;
+}
+.dialog-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+.dialog-actions button {
+  flex: 1;
+  font: inherit;
+  font-weight: 500;
+  border-radius: 10px;
+  padding: 10px;
+  cursor: pointer;
+  border: none;
+}
+.btn-danger {
+  background: var(--expense);
+  color: #fff;
+}
+.btn-secondary {
+  background: var(--bg);
+  color: var(--text);
+}
+.dialog-actions button:hover {
+  opacity: 0.9;
+}
+
+.empty-message {
+  text-align: center;
+  color: var(--muted);
+  padding: 32px 0;
+}
+
+/* ===== גרפים וניתוח ===== */
+.analytics {
+  margin-top: 24px;
+}
+.analytics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.analytics-header h2 {
+  margin-bottom: 0;
+}
+.month-picker {
+  min-width: 180px;
+}
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.chart-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.chart-card h3 {
+  font-size: 1rem;
+  font-weight: 500;
+}
+.chart-subtitle {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+.chart-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 40px 0;
+}
+
+/* מקרא (Legend) */
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.legend-swatch.income  { background: var(--income); }
+.legend-swatch.expense { background: var(--expense); }
+
+/* --- גרף עמודות: הכנסות מול הוצאות --- */
+.bar-plot {
+  position: relative;
+  height: 200px;
+  display: flex;
+  align-items: flex-end;
+  padding-inline-end: 56px;   /* מקום לתוויות הסכומים בצד */
+  border-bottom: 1px solid #c3c2b7;
+}
+/* קווי רשת אופקיים דקים */
+.gridline {
+  position: absolute;
+  inset-inline: 0;
+  border-top: 1px solid #eeede8;
+}
+.gridline span {
+  position: absolute;
+  inset-inline-end: 0;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--surface);
+  padding-inline-start: 4px;
+  font-variant-numeric: tabular-nums;
+}
+/* קבוצה = חודש אחד (שתי עמודות) */
+.bar-group {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 2px;
+  border-radius: 8px 8px 0 0;
+  cursor: default;
+  outline: none;
+}
+.bar-group:hover,
+.bar-group:focus-visible {
+  background: rgba(79, 70, 229, 0.06);
+}
+.bar-group.selected {
+  background: rgba(79, 70, 229, 0.08);
+}
+.bar {
+  width: 32%;
+  max-width: 22px;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.3s;
+}
+.bar.income  { background: var(--income); }
+.bar.expense { background: var(--expense); }
+
+.bar-labels {
+  display: flex;
+  padding-inline-end: 56px;
+  margin-top: 6px;
+}
+.bar-labels span {
+  flex: 1;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.bar-labels span.selected {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* סיכום החודש הנבחר מתחת לגרף */
+.month-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.month-stat {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.month-stat strong {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text);
+  direction: ltr;
+  text-align: right;
+}
+
+/* --- גרף אופקי: הוצאות לפי קטגוריה --- */
+.category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cat-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  padding: 2px 0;
+  border-radius: 6px;
+}
+.cat-row:hover {
+  background: var(--bg);
+}
+.cat-track {
+  height: 14px;
+}
+.cat-bar {
+  height: 100%;
+  min-width: 2px;
+  background: var(--expense);
+  /* פינות מעוגלות רק בקצה של העמודה (בצד שמאל ב-RTL) */
+  border-start-end-radius: 4px;
+  border-end-end-radius: 4px;
+  transition: width 0.3s;
+}
+.cat-value {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+.cat-value small {
+  color: var(--muted);
+}
+.cat-total {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.cat-total strong {
+  color: var(--text);
+  font-weight: 500;
+  direction: ltr;
+}
+
+/* ===== תקציב חודשי ===== */
+.budgets {
+  margin-top: 24px;
+}
+.budgets h2 {
+  margin-bottom: 4px;
+}
+.budget-overview {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 14px 16px;
+  margin: 8px 0 18px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+.budget-overview.empty {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.budget-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.budget-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.budget-top,
+.budget-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.budget-name {
+  font-weight: 500;
+}
+
+/* תווית סטטוס – תמיד אייקון + טקסט, לא רק צבע */
+.budget-status {
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.status-ok .budget-status      { background: #ecfdf5; color: #065f46; }
+.status-warning .budget-status { background: #fffbeb; color: #92400e; }
+.status-over .budget-status    { background: var(--expense-bg); color: #b91c1c; }
+
+/* פס התקדמות */
+.budget-track {
+  height: 10px;
+  background: var(--bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.budget-fill {
+  height: 100%;
+  width: 0;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.3s, background 0.3s;
+}
+.status-warning .budget-fill { background: #f59e0b; }
+.status-over .budget-fill    { background: #d03b3b; }
+.status-none .budget-track   { opacity: 0.5; }
+
+.budget-spent {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.budget-spent strong {
+  color: var(--text);
+  font-weight: 500;
+}
+.budget-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.budget-input input {
+  font: inherit;
+  color: var(--text);
+  width: 100px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.budget-input input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+/* ===== התאמה למסכים קטנים (Responsive) ===== */
+@media (max-width: 900px) {
+  .summary,
+  .main-grid,
+  .charts-grid,
+  .budget-list {
+    /* minmax(0, 1fr) – כדי שטבלה רחבה תיגלל בתוך המסגרת ולא תרחיב את הדף בטלפון */
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* בטלפון: שדות הסינון בשתי עמודות */
+@media (max-width: 520px) {
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
