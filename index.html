@@ -38,7 +38,7 @@
     <div class="main-grid">
       <!-- טופס הוספת תנועה -->
       <section class="panel">
-        <h2>הוספת תנועה</h2>
+        <h2 id="form-title">הוספת תנועה</h2>
         <form id="transaction-form">
 
           <!-- בחירת סוג: הכנסה או הוצאה -->
@@ -69,7 +69,9 @@
             <input type="date" id="date" required>
           </label>
 
-          <button type="submit" class="btn-submit">הוסף תנועה</button>
+          <button type="submit" class="btn-submit" id="submit-btn">הוסף תנועה</button>
+          <!-- כפתור ביטול – מוסתר (hidden) ומופיע רק במצב עריכה -->
+          <button type="button" class="btn-cancel" id="cancel-edit" hidden>ביטול עריכה</button>
         </form>
       </section>
 

@@ -156,7 +156,22 @@ function renderTable() {
     deleteBtn.addEventListener('click', function () {
       askToDelete(t);
     });
-    actionsCell.appendChild(deleteBtn);
+    // כפתור עריכה – ממלא את הטופס בפרטי התנועה
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn-edit';
+    editBtn.textContent = '✏️';
+    editBtn.title = 'ערוך תנועה';
+    editBtn.setAttribute('aria-label', 'ערוך את התנועה ' + t.description);
+    editBtn.addEventListener('click', function () {
+      startEdit(t);
+    });
+    actionsCell.append(editBtn, deleteBtn);
+
+    // השורה שנמצאת בעריכה מקבלת הדגשה
+    if (t.id === editingId) {
+      row.className = 'editing';
+    }
 
     row.append(dateCell, descCell, catCell, amountCell, actionsCell);
     tableBody.appendChild(row);
@@ -291,6 +306,10 @@ function askToDelete(transaction) {
 
 // מוחקת בפועל: filter יוצר מערך חדש בלי התנועה עם ה-id הזה
 function deleteTransaction(id) {
+  // אם מוחקים את התנועה שנמצאת בעריכה – מבטלים את העריכה
+  if (id === editingId) {
+    exitEditMode();
+  }
   transactions = transactions.filter(function (t) {
     return t.id !== id;
   });
@@ -312,6 +331,103 @@ confirmDialog.addEventListener('close', function () {
   pendingDeleteId = null;
 });
 
+// ===== 6.5 עריכת תנועה =====
+// הטופס עובד בשני מצבים:
+//   editingId === null → מצב הוספה (כמו תמיד)
+//   editingId === 'id כלשהו' → מצב עריכה של התנועה הזו
+let editingId = null;
+
+const formTitle = document.getElementById('form-title');
+const submitBtn = document.getElementById('submit-btn');
+const cancelEditBtn = document.getElementById('cancel-edit');
+const formPanel = form.closest('.panel'); // הפאנל שעוטף את הטופס
+
+// תאריך היום בפורמט YYYY-MM-DD
+function getTodayString() {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+// נכנסים למצב עריכה: ממלאים את הטופס בפרטי התנועה
+function startEdit(transaction) {
+  editingId = transaction.id;
+
+  // 1. סוג – מסמנים את כפתור הרדיו המתאים ומעדכנים את רשימת הקטגוריות
+  document.getElementById('type-' + transaction.type).checked = true;
+  updateCategoryOptions();
+
+  // אם הקטגוריה לא קיימת ברשימה (למשל מנתונים ישנים) – מוסיפים אותה זמנית
+  if (!categories[transaction.type].includes(transaction.category)) {
+    const option = document.createElement('option');
+    option.value = transaction.category;
+    option.textContent = transaction.category;
+    categorySelect.appendChild(option);
+  }
+
+  // 2. שאר השדות
+  descriptionInput.value = transaction.description;
+  amountInput.value = transaction.amount;
+  categorySelect.value = transaction.category;
+  dateInput.value = transaction.date;
+
+  // 3. הממשק משתנה למצב עריכה
+  formTitle.textContent = 'עריכת תנועה';
+  submitBtn.textContent = 'שמור שינויים';
+  cancelEditBtn.hidden = false;
+
+  renderTable(); // כדי להדגיש את השורה שבעריכה
+
+  // גוללים אל הטופס (חשוב בטלפון, שם הטופס רחוק מהטבלה)
+  formPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  descriptionInput.focus({ preventScroll: true });
+}
+
+// יוצאים ממצב עריכה וחוזרים לטופס הוספה ריק
+function exitEditMode() {
+  editingId = null;
+  formTitle.textContent = 'הוספת תנועה';
+  submitBtn.textContent = 'הוסף תנועה';
+  cancelEditBtn.hidden = true;
+
+  descriptionInput.value = '';
+  amountInput.value = '';
+  dateInput.value = getTodayString();
+  updateCategoryOptions();
+}
+
+// שומרת את השינויים בתנועה שבעריכה
+function saveEdit() {
+  // findIndex מחזיר את המיקום של התנועה במערך (או 1- אם לא נמצאה)
+  const index = transactions.findIndex(function (t) {
+    return t.id === editingId;
+  });
+
+  if (index !== -1) {
+    // מחליפים את התנועה באובייקט חדש עם אותו id והפרטים המעודכנים
+    transactions[index] = {
+      id: editingId,
+      type: getSelectedType(),
+      description: descriptionInput.value.trim(),
+      amount: parseFloat(amountInput.value),
+      category: categorySelect.value,
+      date: dateInput.value,
+    };
+    saveTransactions();
+  }
+
+  exitEditMode();
+  render();
+}
+
+cancelEditBtn.addEventListener('click', function () {
+  exitEditMode();
+  renderTable(); // מסירים את ההדגשה מהשורה
+});
+
 // ===== 7. אירועים (Events) – תגובה לפעולות המשתמש =====
 
 // כשמשנים בין הכנסה להוצאה – מעדכנים את הקטגוריות
@@ -323,6 +439,12 @@ typeRadios.forEach(function (radio) {
 form.addEventListener('submit', function (event) {
   // מונע מהדפדפן לרענן את הדף (זו ההתנהגות הרגילה של טופס)
   event.preventDefault();
+
+  // במצב עריכה – מעדכנים את התנועה הקיימת במקום ליצור חדשה
+  if (editingId !== null) {
+    saveEdit();
+    return;
+  }
 
   const transaction = {
     // מזהה ייחודי: הזמן הנוכחי + תווים אקראיים (כדי ששתי תנועות לא יקבלו אותו מזהה)

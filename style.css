@@ -269,6 +269,47 @@ tbody tr:hover {
   outline: none;
 }
 
+/* כפתור עריכה – אותו סגנון כמו מחיקה, בצבע הראשי */
+.btn-edit {
+  font: inherit;
+  font-size: 1rem;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: background 0.2s, color 0.2s;
+}
+.btn-edit:hover,
+.btn-edit:focus-visible {
+  background: rgba(79, 70, 229, 0.1);
+  outline: none;
+}
+
+/* השורה שנמצאת כרגע בעריכה */
+tbody tr.editing,
+tbody tr.editing:hover {
+  background: rgba(79, 70, 229, 0.08);
+  box-shadow: inset -4px 0 0 var(--primary); /* פס צבעוני בצד ימין */
+}
+
+/* כפתור ביטול עריכה (בלי display – כדי שהמאפיין hidden ימשיך לעבוד) */
+.btn-cancel {
+  font: inherit;
+  font-weight: 500;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.btn-cancel:hover {
+  border-color: var(--muted);
+}
+
 /* טקסט שמיועד רק לקוראי מסך (נגישות) */
 .visually-hidden {
   position: absolute;
