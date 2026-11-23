@@ -1326,6 +1326,21 @@ button {
     text-align: right;
   }
 }
+/* Safari באייפון מגדיל (zoom) את כל הדף כשנוגעים בשדה שהטקסט בו קטן מ-16px – והדף נשאר מוגדל.
+   (pointer: coarse) = מכשיר מגע (טלפון/טאבלט). שם כל שדה מקבל לפחות 16px, וכך אין הגדלה.
+   !important – גובר על גדלים קטנים יותר שהוגדרו לשדות מסוימים (למשל בכרטיסי התקציב). */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+  /* שדות התאריך בסינון צרים – פחות ריפוד, כדי שהתאריך ייכנס במלואו */
+  .filters input[type="date"] {
+    padding-inline: 6px;
+  }
+}
+
 /* שורת המשתמש יורדת שורה במסכים צרים מאוד, במקום לחרוג מהמסך */
 .user-bar {
   flex-wrap: wrap;
