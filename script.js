@@ -1,6 +1,20 @@
-// ===== 1. נתונים ושמירה ב-LocalStorage =====
+// ===== 1. נתונים ושמירה =====
+// מאז המעבר לענן: הנתונים נשמרים ב-Firestore (דרך auth.js), לא בדפדפן.
+// הפונקציות loadX() שקוראות מ-LocalStorage נשארו רק כדי להעביר נתונים ישנים לחשבון בכניסה הראשונה.
 
-// השם (המפתח) שתחתיו נשמרים הנתונים בדפדפן
+// "גשר" לענן: auth.js מכניס לכאן פונקציה ששומרת ב-Firestore, אחרי שהמשתמש מתחבר
+let cloudSaver = null;
+// האם הנתונים כבר נטענו מהענן (לפני כן לא מריצים תנועות קבועות ולא שומרים)
+let dataReady = false;
+
+// שולחת סוג נתונים אחד לענן ('transactions' / 'budgets' / 'recurring')
+function saveToCloud(kind, value) {
+  if (cloudSaver && dataReady) {
+    cloudSaver(kind, value);
+  }
+}
+
+// השם (המפתח) שתחתיו נשמרו הנתונים בדפדפן (לפני המעבר לענן)
 const STORAGE_KEY = 'budget-transactions';
 
 // נתוני ברירת המחדל – מה שמוצג כשאין עדיין שום דבר שמור (כרגע: רשימה ריקה)
@@ -22,19 +36,14 @@ function loadTransactions() {
   }
 }
 
-// שומרת את כל התנועות ב-LocalStorage
+// שומרת את כל התנועות – בענן
 function saveTransactions() {
-  try {
-    // LocalStorage שומר רק טקסט, לכן ממירים את המערך לטקסט בפורמט JSON
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
-  } catch (error) {
-    console.warn('לא ניתן לשמור נתונים:', error);
-  }
+  saveToCloud('transactions', transactions);
 }
 
 // מערך (Array) שמחזיק את כל התנועות. כל תנועה היא אובייקט עם שדות.
-// בהפעלה – טוענים את מה שנשמר בפעם הקודמת
-let transactions = loadTransactions();
+// מתחיל ריק – הנתונים מגיעים מהענן אחרי ההתחברות
+let transactions = [];
 
 // קטגוריות לפי סוג התנועה
 const categories = {
@@ -317,16 +326,21 @@ const confirmText = document.getElementById('confirm-text');
 
 // הפעולה שתתבצע אם המשתמש יאשר (פונקציה ששמורה במשתנה)
 let pendingConfirmAction = null;
+// הפעולה שתתבצע אם המשתמש יבטל (לא חובה)
+let pendingCancelAction = null;
 
 // פותחת את חלון האישור עם כותרת, טקסט והפעולה לביצוע
 function askConfirm(options) {
   document.getElementById('confirm-title').textContent = options.title;
+  // תחילת המשפט (ברירת מחדל: "האם למחוק את")
+  document.getElementById('confirm-prefix').textContent = options.prefix || 'האם למחוק את';
   document.getElementById('confirm-kind').textContent = options.kind;
   confirmText.textContent = options.text;
   document.getElementById('confirm-note').textContent = options.note;
   // הכיתוב של כפתור האישור (ברירת מחדל: "מחק")
   document.getElementById('confirm-delete').textContent = options.confirmLabel || 'מחק';
   pendingConfirmAction = options.action;
+  pendingCancelAction = options.onCancel || null;
   confirmDialog.showModal(); // showModal חוסם את שאר הדף עד שסוגרים את החלון
 }
 
@@ -356,20 +370,30 @@ function deleteTransaction(id) {
   render();
 }
 
-document.getElementById('confirm-delete').addEventListener('click', function () {
-  if (pendingConfirmAction) {
-    pendingConfirmAction();
-  }
+// סוגרת את החלון ומריצה את הפעולה המתאימה: אישור או ביטול.
+// מטפלים בזה ישירות בלחיצה (ולא באירוע close), כי close מגיע באיחור ולא בכל דפדפן באופן אמין.
+function finishConfirm(confirmed) {
+  const action = confirmed ? pendingConfirmAction : pendingCancelAction;
+  pendingConfirmAction = null;
+  pendingCancelAction = null;
   confirmDialog.close();
+  if (action) {
+    action();
+  }
+}
+
+document.getElementById('confirm-delete').addEventListener('click', function () {
+  finishConfirm(true);
 });
 
 document.getElementById('cancel-delete').addEventListener('click', function () {
-  confirmDialog.close();
+  finishConfirm(false);
 });
 
-// בכל סגירה של החלון (כולל מקש Esc) – מאפסים את הפעולה הממתינה
-confirmDialog.addEventListener('close', function () {
-  pendingConfirmAction = null;
+// מקש Esc: אירוע cancel מגיע לפני שהדפדפן סוגר את החלון – מטפלים בו כמו בכפתור "ביטול"
+confirmDialog.addEventListener('cancel', function (event) {
+  event.preventDefault();
+  finishConfirm(false);
 });
 
 // ===== 6.5 עריכת תנועה =====
@@ -879,16 +903,12 @@ function loadBudgets() {
   }
 }
 
-// שומרת את התקציבים ב-LocalStorage
+// שומרת את התקציבים – בענן
 function saveBudgets() {
-  try {
-    localStorage.setItem(BUDGETS_KEY, JSON.stringify(budgets));
-  } catch (error) {
-    console.warn('לא ניתן לשמור תקציבים:', error);
-  }
+  saveToCloud('budgets', budgets);
 }
 
-let budgets = loadBudgets();
+let budgets = {}; // מגיע מהענן אחרי ההתחברות
 
 // מעדכנת תקציב של קטגוריה אחת. ערך ריק או 0 = מחיקת התקציב
 function setBudget(category, value) {
@@ -1130,15 +1150,12 @@ function loadRules() {
   }
 }
 
+// שומרת את התנועות הקבועות – בענן
 function saveRules() {
-  try {
-    localStorage.setItem(RECURRING_KEY, JSON.stringify(rules));
-  } catch (error) {
-    console.warn('לא ניתן לשמור תנועות קבועות:', error);
-  }
+  saveToCloud('recurring', rules);
 }
 
-let rules = loadRules();
+let rules = []; // מגיע מהענן אחרי ההתחברות
 
 // מזהה ייחודי (אותה שיטה כמו בתנועות)
 function generateId() {
@@ -1164,6 +1181,7 @@ function processRecurring() {
   const todayStr = getTodayString();
   const currentMonth = todayStr.slice(0, 7);
   let added = 0;
+  let rulesChanged = false; // שומרים בענן רק אם באמת משהו השתנה
 
   rules.forEach(function (rule) {
     if (!rule.active) {
@@ -1190,6 +1208,7 @@ function processRecurring() {
         added++;
       }
       rule.lastMonth = month; // החודש הזה טופל – לא נוסיף אותו שוב
+      rulesChanged = true;
       month = addMonths(month, 1);
     }
   });
@@ -1197,7 +1216,9 @@ function processRecurring() {
   if (added > 0) {
     saveTransactions();
   }
-  saveRules();
+  if (rulesChanged) {
+    saveRules();
+  }
   return added;
 }
 
@@ -1461,6 +1482,9 @@ function showToast(message) {
 
 // בודקת תנועות קבועות ומציגה הודעה אם נוספו
 function runRecurringCheck() {
+  if (!dataReady) {
+    return; // הנתונים עוד לא נטענו מהענן – אין עדיין מה לבדוק
+  }
   const added = processRecurring();
   if (added > 0) {
     render();
@@ -1695,5 +1719,96 @@ dateInput.value = [
 ].join('-');
 updateCategoryOptions();
 updateRecurringHint();
-render();
-runRecurringCheck(); // מוסיפה תנועות קבועות שהגיע זמנן (ומציגה הודעה אם נוספו)
+render(); // בהתחלה ריק – הנתונים מגיעים מהענן אחרי ההתחברות (ראו budgetApp למטה)
+
+// ===== 11. הגשר בין האפליקציה לענן (auth.js משתמש בו) =====
+// window.budgetApp הוא אובייקט עם פונקציות ש-auth.js (המודול של Firebase) קורא להן.
+// ככה הקוד של Firebase נשאר בקובץ אחד, והקוד של האפליקציה – בקובץ אחר.
+function toArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+function toObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+window.budgetApp = {
+  // auth.js מעביר פונקציה ששומרת ב-Firestore
+  setCloudSaver: function (saver) {
+    cloudSaver = saver;
+  },
+
+  // טעינה ראשונה אחרי התחברות: כל הנתונים בבת אחת
+  setAllData: function (data) {
+    if (editingId !== null) {
+      exitEditMode();
+    }
+    transactions = toArray(data.transactions);
+    budgets = toObject(data.budgets);
+    rules = toArray(data.recurring);
+    dataReady = true;
+    render();
+    runRecurringCheck(); // עכשיו אפשר להוסיף תנועות קבועות שהגיע זמנן
+  },
+
+  // שינוי שהגיע מהענן (למשל ממכשיר אחר) – סוג נתונים אחד
+  setData: function (kind, value) {
+    if (kind === 'transactions') {
+      transactions = toArray(value);
+    } else if (kind === 'budgets') {
+      budgets = toObject(value);
+    } else if (kind === 'recurring') {
+      rules = toArray(value);
+    }
+    render();
+  },
+
+  // הנתונים הנוכחיים (כדי לבדוק אם שינוי מהענן באמת חדש)
+  getData: function (kind) {
+    if (kind === 'transactions') return transactions;
+    if (kind === 'budgets') return budgets;
+    return rules;
+  },
+
+  // שומרת הכול בענן (משמש בהעברת נתונים ישנים)
+  saveAll: function () {
+    saveTransactions();
+    saveBudgets();
+    saveRules();
+  },
+
+  // התנתקות: מנקים הכול מהמסך ומהזיכרון
+  clearData: function () {
+    dataReady = false;
+    cloudSaver = null;
+    if (transactionDialog.open) {
+      transactionDialog.close();
+    }
+    if (confirmDialog.open) {
+      confirmDialog.close();
+    }
+    if (editingId !== null) {
+      exitEditMode();
+    }
+    transactions = [];
+    budgets = {};
+    rules = [];
+    render();
+  },
+
+  // נתונים שנשמרו בדפדפן לפני המעבר לענן
+  getLegacyData: function () {
+    return { transactions: loadTransactions(), budgets: loadBudgets(), recurring: loadRules() };
+  },
+  clearLegacyData: function () {
+    try {
+      [STORAGE_KEY, BUDGETS_KEY, RECURRING_KEY].forEach(function (key) {
+        localStorage.removeItem(key);
+      });
+    } catch (error) {
+      // אם האחסון חסום – אין מה למחוק
+    }
+  },
+
+  askConfirm: askConfirm,
+  showToast: showToast,
+};

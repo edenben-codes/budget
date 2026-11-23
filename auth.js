@@ -11,12 +11,27 @@ import {
   sendPasswordResetEmail,
   signOut,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  doc,
+  setDoc,
+  onSnapshot,
+  serverTimestamp,
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
 
 // מתחברים לפרויקט שלנו ב-Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 auth.languageCode = 'he'; // מיילים מ-Firebase (כמו איפוס סיסמה) יישלחו בעברית
+
+// מסד הנתונים. persistentLocalCache = עותק מקומי בדפדפן, כדי שאפשר יהיה לעבוד גם בלי אינטרנט
+// (שינויים נשמרים מקומית ונשלחים לענן כשהחיבור חוזר). MultipleTab – עובד גם עם כמה לשוניות פתוחות.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -170,16 +185,149 @@ document.getElementById('logout-btn').addEventListener('click', function () {
   signOut(auth);
 });
 
+// ===== שמירה וסנכרון בענן (Firestore) =====
+// מבנה הנתונים בענן – לכל משתמש "תיקייה" משלו לפי ה-UID:
+//   users/{uid}/data/transactions  → { items: [...] }
+//   users/{uid}/data/budgets       → { items: {...} }
+//   users/{uid}/data/recurring     → { items: [...] }
+// חוקי האבטחה (firestore.rules) מבטיחים שכל משתמש ניגש רק לתיקייה שלו.
+const KINDS = ['transactions', 'budgets', 'recurring'];
+let unsubscribers = []; // פונקציות שמפסיקות את ההאזנה לענן (מפעילים אותן ביציאה)
+let slowLoadingTimer = null;
+
+function stopSync() {
+  unsubscribers.forEach(function (stop) {
+    stop();
+  });
+  unsubscribers = [];
+  clearTimeout(slowLoadingTimer);
+}
+
+function showApp() {
+  loadingScreen.hidden = true;
+  authScreen.hidden = true;
+  appRoot.hidden = false;
+}
+
+function showLoading(text) {
+  loadingScreen.textContent = text;
+  loadingScreen.hidden = false;
+  authScreen.hidden = true;
+  appRoot.hidden = true;
+}
+
+function startSync(user) {
+  stopSync();
+  const budgetApp = window.budgetApp;
+
+  // מה קורה כשהאפליקציה שומרת: כותבים את המסמך המתאים בענן
+  budgetApp.setCloudSaver(function (kind, value) {
+    const ref = doc(db, 'users', user.uid, 'data', kind);
+    // setDoc מחליף את כל המסמך. serverTimestamp – השעה שבה השרת קיבל את השינוי
+    setDoc(ref, { items: value, updatedAt: serverTimestamp() }).catch(function (error) {
+      console.warn('השמירה בענן נכשלה:', error);
+      budgetApp.showToast('⚠ השמירה בענן נכשלה. רענן את הדף ונסה שוב.');
+    });
+  });
+
+  // טעינה ראשונה: מחכים שכל שלושת סוגי הנתונים יגיעו מהשרת
+  const firstValues = {};
+  let firstLoadDone = false;
+
+  // אם הטעינה לוקחת זמן – כנראה אין אינטרנט
+  slowLoadingTimer = setTimeout(function () {
+    if (!firstLoadDone) {
+      showLoading('⏳ טוען נתונים מהענן… אם זה לוקח זמן, בדוק את החיבור לאינטרנט.');
+    }
+  }, 6000);
+
+  KINDS.forEach(function (kind) {
+    const ref = doc(db, 'users', user.uid, 'data', kind);
+
+    // onSnapshot – מאזין: Firebase קורא לפונקציה עכשיו, ושוב בכל פעם שהמסמך משתנה בענן
+    // (למשל כשהוספת תנועה בטלפון – המחשב יקבל את השינוי לבד)
+    const stop = onSnapshot(ref, { includeMetadataChanges: true }, function (snapshot) {
+      const value = snapshot.exists() ? snapshot.data().items : undefined;
+
+      if (!firstLoadDone) {
+        // בטעינה הראשונה מקבלים רק מידע שאושר מהשרת, או נתונים שכבר שמורים בעותק המקומי.
+        // "המסמך לא קיים" מהעותק המקומי לא מספיק – אולי פשוט עוד לא דיברנו עם השרת.
+        if (snapshot.metadata.fromCache && !snapshot.exists()) {
+          return;
+        }
+        firstValues[kind] = value;
+        if (KINDS.every(function (k) { return k in firstValues; })) {
+          firstLoadDone = true;
+          clearTimeout(slowLoadingTimer);
+          handleFirstLoad(firstValues);
+        }
+        return;
+      }
+
+      // אחרי הטעינה הראשונה: שינוי שהתחיל אצלנו (עוד לא אושר בשרת) – כבר מופיע על המסך
+      if (snapshot.metadata.hasPendingWrites) {
+        return;
+      }
+      // אם הנתונים זהים למה שכבר מוצג – לא צריך לצייר מחדש
+      if (JSON.stringify(value) === JSON.stringify(budgetApp.getData(kind))) {
+        return;
+      }
+      budgetApp.setData(kind, value); // שינוי ממכשיר אחר
+    }, function (error) {
+      console.warn('שגיאה בטעינה מהענן:', error);
+      showLoading('⚠ לא הצלחנו לטעון את הנתונים מהענן. רענן את הדף כדי לנסות שוב.');
+    });
+
+    unsubscribers.push(stop);
+  });
+}
+
+// טעינה ראשונה: אם החשבון ריק ויש נתונים ישנים בדפדפן – מציעים להעלות אותם
+function handleFirstLoad(values) {
+  const budgetApp = window.budgetApp;
+  const cloudIsEmpty = KINDS.every(function (kind) {
+    return values[kind] === undefined;
+  });
+  const legacy = budgetApp.getLegacyData();
+  const legacyCount = legacy.transactions.length + Object.keys(legacy.budgets).length + legacy.recurring.length;
+
+  if (cloudIsEmpty && legacyCount > 0) {
+    budgetApp.setAllData({ transactions: [], budgets: {}, recurring: [] });
+    showApp();
+    budgetApp.askConfirm({
+      title: 'העברת הנתונים לחשבון',
+      prefix: 'להעלות לחשבון שלך את',
+      kind: 'הנתונים ששמורים בדפדפן הזה',
+      text: '(' + legacy.transactions.length + ' תנועות, ' + Object.keys(legacy.budgets).length +
+        ' תקציבים, ' + legacy.recurring.length + ' תנועות קבועות)',
+      note: 'אחרי ההעלאה הנתונים יישמרו בענן – ותוכל לראות אותם מכל מכשיר. אם הנתונים האלה לא שלך (למשל, מישהו אחר השתמש בדפדפן), לחץ "ביטול" – החשבון יתחיל ריק והנתונים יישארו בדפדפן.',
+      confirmLabel: 'העלה',
+      action: function () {
+        budgetApp.setAllData(legacy);
+        budgetApp.saveAll();
+        budgetApp.clearLegacyData();
+        budgetApp.showToast('☁ הנתונים הועלו לחשבון שלך.');
+      },
+    });
+    return;
+  }
+
+  budgetApp.setAllData(values);
+  showApp();
+}
+
 // ----- הלב: מה מציגים לפי מצב ההתחברות -----
 // onAuthStateChanged רץ פעם אחת כשהדף נטען, ושוב בכל כניסה או יציאה.
 // Firebase זוכר משתמש מחובר גם אחרי סגירת הדפדפן – כך שלא צריך להתחבר כל פעם.
 onAuthStateChanged(auth, function (user) {
-  loadingScreen.hidden = true;
   if (user) {
     document.getElementById('user-email').textContent = user.email;
-    authScreen.hidden = true;
-    appRoot.hidden = false;
+    showLoading('⏳ טוען את הנתונים שלך…');
+    startSync(user);
   } else {
+    stopSync();
+    window.budgetApp.clearData(); // מנקים את הנתונים של המשתמש הקודם מהמסך
+    loadingScreen.hidden = true;
     appRoot.hidden = true;
     authScreen.hidden = false;
     setMode('login');
