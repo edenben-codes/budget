@@ -1769,6 +1769,19 @@ window.budgetApp = {
     return rules;
   },
 
+  // מוחקת את כל התנועות (אחרי אימות סיסמה ב-auth.js). תקציבים ותנועות קבועות נשארים.
+  // התנועות הקבועות לא יוסיפו מחדש את מה שנמחק – הן זוכרות אילו חודשים כבר טופלו.
+  deleteAllTransactions: function () {
+    if (editingId !== null) {
+      exitEditMode();
+    }
+    const count = transactions.length;
+    transactions = [];
+    saveTransactions();
+    render();
+    return count;
+  },
+
   // שומרת הכול בענן (משמש בהעברת נתונים ישנים)
   saveAll: function () {
     saveTransactions();

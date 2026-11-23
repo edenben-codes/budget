@@ -1112,6 +1112,81 @@ tbody tr.editing:hover {
   cursor: wait;
 }
 
+/* ===== ייבוא מקובץ ===== */
+.btn-add.import {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.import-dialog {
+  width: min(900px, calc(100% - 32px));
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.import-dialog p {
+  margin-bottom: 8px;
+}
+.import-file-name {
+  font-weight: 500;
+}
+.import-mapping {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 8px 0 14px;
+}
+.import-summary {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+.import-table-wrapper {
+  max-height: 45vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.import-table-wrapper th {
+  position: sticky; /* הכותרות נשארות למעלה בזמן גלילה */
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.import-table-wrapper td,
+.import-table-wrapper th {
+  padding: 8px;
+  font-size: 0.85rem;
+}
+.import-table-wrapper select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.import-table-wrapper input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+.import-desc {
+  white-space: normal;
+  min-width: 160px;
+}
+.duplicate-badge {
+  display: inline-block;
+  margin-inline-start: 6px;
+  font-size: 0.75rem;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: #92400e;
+}
+tr.import-excluded {
+  opacity: 0.45;
+}
+
 /* זכור אותי */
 .remember-box {
   background: var(--bg);
@@ -1159,6 +1234,14 @@ tbody tr.editing:hover {
 
 /* קישור "מחק חשבון" – אדום, כדי שיהיה ברור שזו פעולה מסוכנת */
 .danger-link {
+  color: var(--expense);
+}
+/* כפתור מסוכן (מחיקת כל התנועות) */
+.danger-button {
+  color: var(--expense);
+}
+.danger-button:hover {
+  border-color: var(--expense);
   color: var(--expense);
 }
 
@@ -1217,7 +1300,8 @@ tbody tr.editing:hover {
   .main-grid,
   .charts-grid,
   .budget-list,
-  .recurring-list {
+  .recurring-list,
+  .import-mapping {
     /* minmax(0, 1fr) – כדי שטבלה רחבה תיגלל בתוך המסגרת ולא תרחיב את הדף בטלפון */
     grid-template-columns: minmax(0, 1fr);
   }

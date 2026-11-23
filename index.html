@@ -98,6 +98,7 @@
       <div class="header-actions">
         <button type="button" class="btn-add income" id="add-income">+ הכנסה</button>
         <button type="button" class="btn-add expense" id="add-expense">+ הוצאה</button>
+        <button type="button" class="btn-add import" id="open-import">📥 ייבוא</button>
       </div>
     </header>
 
@@ -249,6 +250,7 @@
         <button type="button" class="btn-reset" id="export-backup">⬇ הורד גיבוי</button>
         <button type="button" class="btn-reset" id="import-backup">⬆ שחזר מגיבוי</button>
         <button type="button" class="btn-reset" id="export-csv">📄 ייצוא לאקסל</button>
+        <button type="button" class="btn-reset danger-button" id="delete-all-transactions">🗑 מחק את כל התנועות</button>
         <!-- שדה בחירת קובץ מוסתר – הכפתור "שחזר מגיבוי" פותח אותו -->
         <input type="file" id="import-file" accept=".json,application/json" hidden>
       </div>
@@ -319,11 +321,88 @@
     </div>
   </dialog>
 
-  <!-- חלון מחיקת חשבון. הקוד שלו נמצא ב-auth.js -->
+  <!-- חלון ייבוא תנועות מקובץ אקסל / CSV. הקוד שלו נמצא ב-import.js -->
+  <dialog id="import-dialog" class="dialog import-dialog" aria-labelledby="import-title">
+    <div class="dialog-header">
+      <h2 id="import-title">📥 ייבוא תנועות מקובץ</h2>
+      <button type="button" class="btn-close" id="import-close" aria-label="סגור">✕</button>
+    </div>
+
+    <!-- שלב 1: בחירת קובץ -->
+    <div id="import-step-file">
+      <p>בחר קובץ אקסל (xlsx, xls) או CSV שהורדת מהבנק או מחברת האשראי.</p>
+      <p class="dialog-note">🔒 הקובץ נקרא בתוך הדפדפן בלבד ולא נשלח לשום מקום. רק התנועות שתאשר יישמרו בחשבון שלך.</p>
+      <button type="button" class="btn-submit" id="import-choose">בחר קובץ</button>
+      <input type="file" id="import-excel-file" accept=".xlsx,.xls,.csv" hidden>
+    </div>
+
+    <!-- שלב 2: התאמת עמודות ותצוגה מקדימה -->
+    <div id="import-step-map" hidden>
+      <p class="import-file-name">📄 <span id="import-file-name"></span> · <button type="button" class="link-btn" id="import-other-file">קובץ אחר</button></p>
+
+      <p class="dialog-note">בדוק שהעמודות נכונות. אם לא – בחר את העמודה הנכונה, והתצוגה תתעדכן.</p>
+      <div class="import-mapping">
+        <label class="field">
+          <span>תאריך</span>
+          <select id="map-date"></select>
+        </label>
+        <label class="field">
+          <span>תיאור</span>
+          <select id="map-desc"></select>
+        </label>
+        <label class="field">
+          <span>סוג הסכום</span>
+          <select id="map-mode">
+            <option value="signed">עמודה אחת – מינוס = הוצאה (דף חשבון)</option>
+            <option value="expense-positive">עמודה אחת – כל סכום הוא הוצאה (כרטיס אשראי)</option>
+            <option value="split">שתי עמודות – חובה וזכות</option>
+          </select>
+        </label>
+        <label class="field" id="map-amount-field">
+          <span>סכום</span>
+          <select id="map-amount"></select>
+        </label>
+        <label class="field" id="map-debit-field" hidden>
+          <span>חובה (הוצאות)</span>
+          <select id="map-debit"></select>
+        </label>
+        <label class="field" id="map-credit-field" hidden>
+          <span>זכות (הכנסות)</span>
+          <select id="map-credit"></select>
+        </label>
+      </div>
+
+      <p class="import-summary" id="import-summary" role="status"></p>
+
+      <div class="table-wrapper import-table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="import-select-all" aria-label="סמן הכול" checked></th>
+              <th>תאריך</th>
+              <th>תיאור</th>
+              <th>סכום</th>
+              <th>קטגוריה</th>
+            </tr>
+          </thead>
+          <tbody id="import-preview"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="auth-error" id="import-error" role="alert" hidden></p>
+
+    <div class="dialog-actions" id="import-actions" hidden>
+      <button type="button" class="btn-submit" id="import-confirm">ייבא</button>
+      <button type="button" class="btn-secondary" id="import-cancel">ביטול</button>
+    </div>
+  </dialog>
+
+  <!-- חלון אישור עם סיסמה – משמש למחיקת חשבון ולמחיקת כל התנועות. הקוד שלו נמצא ב-auth.js -->
   <dialog id="delete-account-dialog" class="dialog delete-account-dialog" aria-labelledby="delete-account-title">
-    <h3 id="delete-account-title">מחיקת החשבון</h3>
-    <p>הפעולה תמחק <strong>לצמיתות</strong> את החשבון שלך ואת כל הנתונים שלו מהענן: תנועות, תקציבים ותנועות קבועות.</p>
-    <p class="dialog-note">אי אפשר לבטל את הפעולה הזו. מומלץ להוריד גיבוי קודם.</p>
+    <h3 id="delete-account-title"></h3>
+    <p id="password-dialog-message"></p>
+    <p class="dialog-note" id="password-dialog-note"></p>
     <button type="button" class="btn-reset" id="delete-account-backup">⬇ הורד גיבוי קודם</button>
     <label class="field">
       <span>כדי לאשר, הקלד את הסיסמה שלך</span>
@@ -331,7 +410,7 @@
     </label>
     <p class="auth-error" id="delete-account-error" role="alert" hidden></p>
     <div class="dialog-actions">
-      <button type="button" class="btn-danger" id="delete-account-confirm">מחק לצמיתות</button>
+      <button type="button" class="btn-danger" id="delete-account-confirm"></button>
       <button type="button" class="btn-secondary" id="delete-account-cancel">ביטול</button>
     </div>
   </dialog>
@@ -341,6 +420,8 @@
 
   <!-- את הסקריפט טוענים בסוף, אחרי שכל האלמנטים בדף כבר קיימים -->
   <script src="script.js"></script>
+  <!-- ייבוא מקובץ – משתמש בפונקציות ובנתונים של script.js, ולכן נטען אחריו -->
+  <script src="import.js"></script>
   <!-- type="module" – מאפשר להשתמש ב-import (טעינת Firebase והגדרות מקבצים אחרים) -->
   <script type="module" src="auth.js"></script>
 </body>

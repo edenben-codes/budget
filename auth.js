@@ -336,26 +336,81 @@ function handleFirstLoad(values) {
   showApp();
 }
 
-// ===== מחיקת חשבון =====
-// כל משתמש יכול למחוק את החשבון שלו ואת כל הנתונים שלו – בלי לבקש מאף אחד.
+// ===== פעולות מסוכנות עם אימות סיסמה =====
+// חלון אחד משמש לשתי פעולות: מחיקת החשבון, ומחיקת כל התנועות.
+// בשתיהן: קודם מוודאים שזה באמת המשתמש (אימות סיסמה מחדש), ורק אז מבצעים.
 const deleteDialog = document.getElementById('delete-account-dialog');
 const deletePassword = document.getElementById('delete-account-password');
 const deleteError = document.getElementById('delete-account-error');
 const deleteConfirmBtn = document.getElementById('delete-account-confirm');
 let accountJustDeleted = false; // כדי להציג הודעה במסך הכניסה אחרי המחיקה
+let passwordAction = null;      // מה לעשות אחרי שהסיסמה אומתה (פונקציה)
 
 function closeDeleteDialog() {
   deletePassword.value = '';
   deleteError.hidden = true;
+  passwordAction = null;
   deleteDialog.close();
 }
 
-document.getElementById('delete-account-btn').addEventListener('click', function () {
+// פותחת את חלון אימות הסיסמה עם טקסטים ופעולה
+function openPasswordDialog(options) {
+  document.getElementById('delete-account-title').textContent = options.title;
+  document.getElementById('password-dialog-message').textContent = options.message;
+  document.getElementById('password-dialog-note').textContent = options.note;
+  deleteConfirmBtn.textContent = options.confirmLabel;
+  passwordAction = options.action;
   deletePassword.value = '';
   deleteError.hidden = true;
   deleteConfirmBtn.disabled = false;
   deleteDialog.showModal();
   deletePassword.focus();
+}
+
+// פעולה 1: מחיקת החשבון
+async function deleteAccountAction(user) {
+  // מפסיקים להאזין לענן ולשמור – כדי ששום דבר לא ייכתב מחדש אחרי המחיקה
+  stopSync();
+  window.budgetApp.setCloudSaver(null);
+
+  // מוחקים את כל הנתונים מהענן (חייבים לעשות את זה לפני מחיקת החשבון – אחריה אין הרשאה)
+  // Promise.all – מריץ את שלוש המחיקות במקביל ומחכה שכולן יסתיימו
+  await Promise.all(KINDS.map(function (kind) {
+    return deleteDoc(doc(db, 'users', user.uid, 'data', kind));
+  }));
+
+  // מוחקים את החשבון עצמו. onAuthStateChanged יחזיר אותנו למסך הכניסה
+  accountJustDeleted = true;
+  await deleteUser(user);
+}
+
+document.getElementById('delete-account-btn').addEventListener('click', function () {
+  openPasswordDialog({
+    title: 'מחיקת החשבון',
+    message: 'הפעולה תמחק לצמיתות את החשבון שלך ואת כל הנתונים שלו מהענן: תנועות, תקציבים ותנועות קבועות.',
+    note: 'אי אפשר לבטל את הפעולה הזו. מומלץ להוריד גיבוי קודם.',
+    confirmLabel: 'מחק לצמיתות',
+    action: deleteAccountAction,
+  });
+});
+
+// פעולה 2: מחיקת כל התנועות (התקציבים והתנועות הקבועות נשארים)
+document.getElementById('delete-all-transactions').addEventListener('click', function () {
+  const count = window.budgetApp.getData('transactions').length;
+  if (count === 0) {
+    window.budgetApp.showToast('אין תנועות למחיקה.');
+    return;
+  }
+  openPasswordDialog({
+    title: 'מחיקת כל התנועות',
+    message: 'הפעולה תמחק את כל ' + count + ' התנועות שלך – מהענן ומכל המכשירים. התקציבים והתנועות הקבועות יישארו.',
+    note: 'אי אפשר לבטל את הפעולה הזו. מומלץ להוריד גיבוי קודם – אפשר לשחזר ממנו אחר כך.',
+    confirmLabel: 'מחק את כל התנועות',
+    action: async function () {
+      const deleted = window.budgetApp.deleteAllTransactions();
+      window.budgetApp.showToast('🗑 נמחקו ' + deleted + ' תנועות.');
+    },
+  });
 });
 
 // "הורד גיבוי קודם" – משתמש בכפתור הגיבוי הקיים של האפליקציה
@@ -384,23 +439,15 @@ deleteConfirmBtn.addEventListener('click', async function () {
   deleteConfirmBtn.disabled = true;
   deleteError.hidden = true;
   try {
-    // 1. אימות מחדש: Firebase מוחק חשבון רק אם הסיסמה הוקלדה זה עתה
+    // 1. אימות מחדש: מוודאים שהסיסמה הוקלדה זה עתה (Firebase גם דורש את זה למחיקת חשבון)
     const credential = EmailAuthProvider.credential(user.email, deletePassword.value);
     await reauthenticateWithCredential(user, credential);
 
-    // 2. מפסיקים להאזין לענן ולשמור – כדי ששום דבר לא ייכתב מחדש אחרי המחיקה
-    stopSync();
-    window.budgetApp.setCloudSaver(null);
-
-    // 3. מוחקים את כל הנתונים מהענן (חייבים לעשות את זה לפני מחיקת החשבון – אחריה אין הרשאה)
-    // Promise.all – מריץ את שלוש המחיקות במקביל ומחכה שכולן יסתיימו
-    await Promise.all(KINDS.map(function (kind) {
-      return deleteDoc(doc(db, 'users', user.uid, 'data', kind));
-    }));
-
-    // 4. מוחקים את החשבון עצמו. onAuthStateChanged יחזיר אותנו למסך הכניסה
-    accountJustDeleted = true;
-    await deleteUser(user);
+    // 2. מבצעים את הפעולה שנבחרה (מחיקת חשבון או מחיקת כל התנועות)
+    const action = passwordAction;
+    if (action) {
+      await action(user);
+    }
     closeDeleteDialog();
   } catch (error) {
     accountJustDeleted = false;
