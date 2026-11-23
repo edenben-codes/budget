@@ -2,11 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Each user can read and write ONLY their own data:
+    // Each user can read and write ONLY their own data,
+    // and only after verifying their email address:
     // users/{their UID}/data/transactions | budgets | recurring
     match /users/{userId}/data/{docId} {
       allow read, write: if request.auth != null
                          && request.auth.uid == userId
+                         && request.auth.token.email_verified == true
                          && docId in ['transactions', 'budgets', 'recurring'];
     }
 

@@ -1112,6 +1112,51 @@ tbody tr.editing:hover {
   cursor: wait;
 }
 
+/* זכור אותי */
+.remember-box {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.remember-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.remember-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.remember-hint {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* מסך אימות מייל */
+.verify-steps {
+  margin: 0 0 16px;
+  padding-inline-start: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.95rem;
+}
+.verify-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+#verify-screen .auth-error,
+#verify-screen .auth-success {
+  margin-top: 8px;
+}
+
 /* קישור "מחק חשבון" – אדום, כדי שיהיה ברור שזו פעולה מסוכנת */
 .danger-link {
   color: var(--expense);

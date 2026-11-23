@@ -39,6 +39,15 @@
           <input type="password" id="auth-password-confirm" autocomplete="new-password" dir="ltr">
         </label>
 
+        <!-- זכור אותי: בלי סימון – ניתוק אחרי 30 דקות בלי פעילות וכשהדפדפן נסגר -->
+        <div class="remember-box">
+          <label class="remember-toggle">
+            <input type="checkbox" id="auth-remember">
+            <span>זכור אותי במכשיר הזה</span>
+          </label>
+          <p class="remember-hint">בלי סימון: תנותק אחרי 30 דקות בלי פעילות, וכשהדפדפן נסגר. סמן רק במכשיר אישי.</p>
+        </div>
+
         <!-- role="alert" – קוראי מסך מקריאים את השגיאה מיד -->
         <p class="auth-error" id="auth-error" role="alert" hidden></p>
         <p class="auth-success" id="auth-success" role="status" hidden></p>
@@ -48,6 +57,26 @@
       </form>
 
       <p class="auth-note">🔒 הסיסמה נשמרת מוצפנת אצל Google (Firebase) – אף אחד, כולל מפתח האפליקציה, לא יכול לראות אותה.</p>
+    </div>
+  </div>
+
+  <!-- מסך אימות מייל – מוצג למשתמש מחובר שעוד לא אישר את המייל שלו -->
+  <div class="auth-screen" id="verify-screen" hidden>
+    <div class="auth-card">
+      <h1>📧 אימות כתובת המייל</h1>
+      <p class="auth-subtitle">כדי להשתמש באפליקציה, צריך לאשר שהמייל <strong id="verify-email" dir="ltr"></strong> שייך לך.</p>
+      <ol class="verify-steps">
+        <li>לחץ על <strong>"שלח מייל אימות"</strong> (אחרי הרשמה – כבר שלחנו).</li>
+        <li>פתח את המייל מ-Firebase ולחץ על הקישור. בדוק גם בספאם.</li>
+        <li>חזור לכאן ולחץ <strong>"אימתתי – המשך"</strong>.</li>
+      </ol>
+      <p class="auth-error" id="verify-error" role="alert" hidden></p>
+      <p class="auth-success" id="verify-success" role="status" hidden></p>
+      <div class="verify-actions">
+        <button type="button" class="btn-submit" id="verify-continue">אימתתי – המשך</button>
+        <button type="button" class="btn-reset" id="verify-resend">שלח מייל אימות</button>
+        <button type="button" class="link-btn" id="verify-logout">התנתק</button>
+      </div>
     </div>
   </div>
 

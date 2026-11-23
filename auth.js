@@ -13,6 +13,11 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   deleteUser,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  sendEmailVerification,
+  reload,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   initializeFirestore,
@@ -43,6 +48,7 @@ const MIN_PASSWORD_LENGTH = 8;
 const loadingScreen = document.getElementById('auth-loading');
 const authScreen = document.getElementById('auth-screen');
 const appRoot = document.getElementById('app-root');
+const verifyScreen = document.getElementById('verify-screen');
 const authForm = document.getElementById('auth-form');
 const emailInput = document.getElementById('auth-email');
 const passwordInput = document.getElementById('auth-password');
@@ -145,9 +151,17 @@ authForm.addEventListener('submit', async function (event) {
 
   submitBtn.disabled = true; // מונעים לחיצה כפולה בזמן שמחכים לשרת
   try {
+    // "זכור אותי": Local = נשאר מחובר גם אחרי סגירת הדפדפן. Session = מתנתק כשהדפדפן נסגר.
+    // חייבים לקבוע את זה לפני ההתחברות עצמה.
+    const remember = document.getElementById('auth-remember').checked;
+    await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+    setRemembered(remember);
+    markActivity(true); // מתחילים לספור 30 דקות מעכשיו
+
     // await – מחכים לתשובה מהשרת של Firebase. אם יש שגיאה, קופצים ל-catch
     if (mode === 'signup') {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      await sendVerification(result.user); // שולחים מייל אימות מיד אחרי ההרשמה
     } else {
       await signInWithEmailAndPassword(auth, email, password);
     }
@@ -210,6 +224,7 @@ function stopSync() {
 function showApp() {
   loadingScreen.hidden = true;
   authScreen.hidden = true;
+  verifyScreen.hidden = true;
   appRoot.hidden = false;
 }
 
@@ -217,6 +232,7 @@ function showLoading(text) {
   loadingScreen.textContent = text;
   loadingScreen.hidden = false;
   authScreen.hidden = true;
+  verifyScreen.hidden = true;
   appRoot.hidden = true;
 }
 
@@ -404,24 +420,184 @@ deleteConfirmBtn.addEventListener('click', async function () {
   }
 });
 
+// ===== ניתוק אוטומטי אחרי 30 דקות בלי פעילות =====
+// חל רק כש"זכור אותי" לא סומן. זמן הפעילות האחרונה נשמר בדפדפן,
+// כך שהבדיקה עובדת גם אם הדף היה סגור או ברקע (למשל בטלפון).
+const IDLE_LIMIT_MS = 30 * 60 * 1000;      // 30 דקות במילישניות
+const ACTIVITY_KEY = 'budget-last-activity';
+const REMEMBER_KEY = 'budget-remember';
+let lastActivityWrite = 0;
+let idleSignedOut = false; // כדי להציג הודעה במסך הכניסה
+
+function isRemembered() {
+  try {
+    return localStorage.getItem(REMEMBER_KEY) === '1';
+  } catch (error) {
+    return false;
+  }
+}
+function setRemembered(value) {
+  try {
+    localStorage.setItem(REMEMBER_KEY, value ? '1' : '0');
+  } catch (error) {
+    // אם האחסון חסום – פשוט לא זוכרים
+  }
+}
+
+// שומרת "עכשיו" כזמן הפעילות האחרונה. כדי לא לכתוב על כל תזוזה – לכל היותר פעם ב-10 שניות
+function markActivity(force) {
+  const now = Date.now();
+  if (!force && now - lastActivityWrite < 10000) {
+    return;
+  }
+  lastActivityWrite = now;
+  try {
+    localStorage.setItem(ACTIVITY_KEY, String(now));
+  } catch (error) {
+    // מתעלמים
+  }
+}
+
+function isIdleExpired() {
+  let last = 0;
+  try {
+    last = Number(localStorage.getItem(ACTIVITY_KEY)) || 0;
+  } catch (error) {
+    return false;
+  }
+  return last > 0 && Date.now() - last > IDLE_LIMIT_MS;
+}
+
+// בודקת אם צריך לנתק – ומנתקת
+function checkIdle() {
+  if (auth.currentUser && !isRemembered() && isIdleExpired()) {
+    idleSignedOut = true;
+    signOut(auth);
+  }
+}
+
+// כל פעולה של המשתמש = פעילות. passive: true – לא מאט את הגלילה
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (eventName) {
+  document.addEventListener(eventName, function () {
+    if (auth.currentUser) {
+      markActivity(false);
+    }
+  }, { passive: true });
+});
+
+setInterval(checkIdle, 30 * 1000); // בודקים כל 30 שניות
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden) {
+    checkIdle(); // חזרנו לאפליקציה אחרי שהייתה ברקע – בודקים מיד
+  }
+});
+
+// ===== אימות מייל =====
+const verifyError = document.getElementById('verify-error');
+const verifySuccess = document.getElementById('verify-success');
+
+function showVerifyScreen(user) {
+  document.getElementById('verify-email').textContent = user.email;
+  loadingScreen.hidden = true;
+  authScreen.hidden = true;
+  appRoot.hidden = true;
+  verifyScreen.hidden = false;
+}
+
+function verifyMessage(text, isError) {
+  verifyError.hidden = !isError;
+  verifySuccess.hidden = isError;
+  (isError ? verifyError : verifySuccess).textContent = text;
+}
+
+// שולחת מייל אימות. הקישור במייל יחזיר את המשתמש לאפליקציה
+async function sendVerification(user) {
+  try {
+    await sendEmailVerification(user, { url: window.location.origin + window.location.pathname });
+    verifyMessage('📧 שלחנו מייל אימות אל ' + user.email + '. בדוק גם בתיקיית הספאם.', false);
+  } catch (error) {
+    if (error.code === 'auth/too-many-requests') {
+      verifyMessage('כבר שלחנו כמה מיילים. חכה כמה דקות ונסה שוב.', true);
+    } else {
+      verifyMessage('שליחת המייל נכשלה. נסה שוב בעוד רגע.', true);
+    }
+  }
+}
+
+document.getElementById('verify-resend').addEventListener('click', function () {
+  if (auth.currentUser) {
+    sendVerification(auth.currentUser);
+  }
+});
+
+document.getElementById('verify-continue').addEventListener('click', async function () {
+  const user = auth.currentUser;
+  if (!user) {
+    return;
+  }
+  try {
+    // reload – מושך מהשרת את המצב העדכני של המשתמש (האם המייל כבר אומת)
+    await reload(user);
+    if (!auth.currentUser.emailVerified) {
+      verifyMessage('המייל עדיין לא אומת. לחץ על הקישור במייל, ואז נסה שוב.', true);
+      return;
+    }
+    // מבקשים "כרטיס כניסה" (token) חדש – כדי שגם חוקי האבטחה בשרת יראו שהמייל אומת
+    await auth.currentUser.getIdToken(true);
+    enterApp(auth.currentUser);
+  } catch (error) {
+    verifyMessage('משהו השתבש. בדוק את החיבור לאינטרנט ונסה שוב.', true);
+  }
+});
+
+document.getElementById('verify-logout').addEventListener('click', function () {
+  signOut(auth);
+});
+
+// נכנסים לאפליקציה: טוענים את הנתונים מהענן
+function enterApp(user) {
+  document.getElementById('user-email').textContent = user.email;
+  showLoading('⏳ טוען את הנתונים שלך…');
+  startSync(user);
+}
+
 // ----- הלב: מה מציגים לפי מצב ההתחברות -----
 // onAuthStateChanged רץ פעם אחת כשהדף נטען, ושוב בכל כניסה או יציאה.
-// Firebase זוכר משתמש מחובר גם אחרי סגירת הדפדפן – כך שלא צריך להתחבר כל פעם.
 onAuthStateChanged(auth, function (user) {
   if (user) {
-    document.getElementById('user-email').textContent = user.email;
-    showLoading('⏳ טוען את הנתונים שלך…');
-    startSync(user);
+    // 1. אם עברו 30 דקות בלי פעילות (וזכור אותי לא סומן) – מנתקים לפני שמציגים משהו
+    if (!isRemembered() && isIdleExpired()) {
+      idleSignedOut = true;
+      signOut(auth);
+      return;
+    }
+    markActivity(true);
+
+    // 2. מייל לא מאומת – מסך אימות, בלי גישה לנתונים
+    if (!user.emailVerified) {
+      showVerifyScreen(user);
+      return;
+    }
+
+    // 3. הכול תקין – נכנסים
+    enterApp(user);
   } else {
     stopSync();
     window.budgetApp.clearData(); // מנקים את הנתונים של המשתמש הקודם מהמסך
     loadingScreen.hidden = true;
     appRoot.hidden = true;
+    verifyScreen.hidden = true;
+    verifyError.hidden = true;    // מנקים הודעות ממסך האימות, לקראת המשתמש הבא
+    verifySuccess.hidden = true;
     authScreen.hidden = false;
     setMode('login');
+    document.getElementById('auth-remember').checked = isRemembered();
     if (accountJustDeleted) {
       accountJustDeleted = false;
       showSuccess('✅ החשבון וכל הנתונים שלו נמחקו.');
+    } else if (idleSignedOut) {
+      idleSignedOut = false;
+      showSuccess('🔒 נותקת אוטומטית אחרי 30 דקות בלי פעילות. היכנס שוב כדי להמשיך.');
     }
   }
 });
