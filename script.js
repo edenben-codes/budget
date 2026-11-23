@@ -144,6 +144,14 @@ function renderTable() {
 
     const descCell = document.createElement('td');
     descCell.textContent = t.description;
+    // תנועה שנוצרה אוטומטית מתנועה קבועה מקבלת סימון 🔁
+    if (t.recurringId) {
+      const mark = document.createElement('span');
+      mark.className = 'recurring-mark';
+      mark.textContent = '🔁';
+      mark.title = 'נוספה אוטומטית מתנועה קבועה';
+      descCell.appendChild(mark);
+    }
 
     const catCell = document.createElement('td');
     const badge = document.createElement('span');
@@ -209,6 +217,7 @@ function render() {
   renderTable();
   renderCharts(); // הגרפים מתעדכנים יחד עם כל השאר
   renderBudgets(); // וגם התקציבים
+  renderRecurring(); // וגם רשימת התנועות הקבועות
 }
 
 // ===== 5. חיפוש וסינון =====
@@ -301,18 +310,35 @@ document.getElementById('filter-reset').addEventListener('click', function () {
   renderTable();
 });
 
-// ===== 6. מחיקת תנועה עם אישור =====
+// ===== 6. מחיקה עם אישור =====
+// חלון האישור משמש גם למחיקת תנועה וגם למחיקת תנועה קבועה.
 const confirmDialog = document.getElementById('confirm-dialog');
 const confirmText = document.getElementById('confirm-text');
 
-// כאן נשמר ה-id של התנועה שממתינה לאישור מחיקה
-let pendingDeleteId = null;
+// הפעולה שתתבצע אם המשתמש יאשר (פונקציה ששמורה במשתנה)
+let pendingConfirmAction = null;
+
+// פותחת את חלון האישור עם כותרת, טקסט והפעולה לביצוע
+function askConfirm(options) {
+  document.getElementById('confirm-title').textContent = options.title;
+  document.getElementById('confirm-kind').textContent = options.kind;
+  confirmText.textContent = options.text;
+  document.getElementById('confirm-note').textContent = options.note;
+  pendingConfirmAction = options.action;
+  confirmDialog.showModal(); // showModal חוסם את שאר הדף עד שסוגרים את החלון
+}
 
 // פותחת את חלון האישור עבור תנועה מסוימת
 function askToDelete(transaction) {
-  pendingDeleteId = transaction.id;
-  confirmText.textContent = '"' + transaction.description + '" (' + formatMoney(transaction.amount) + ')';
-  confirmDialog.showModal(); // showModal חוסם את שאר הדף עד שסוגרים את החלון
+  askConfirm({
+    title: 'מחיקת תנועה',
+    kind: 'התנועה',
+    text: '"' + transaction.description + '" (' + formatMoney(transaction.amount) + ')',
+    note: 'אי אפשר לבטל את הפעולה הזו.',
+    action: function () {
+      deleteTransaction(transaction.id);
+    },
+  });
 }
 
 // מוחקת בפועל: filter יוצר מערך חדש בלי התנועה עם ה-id הזה
@@ -329,7 +355,9 @@ function deleteTransaction(id) {
 }
 
 document.getElementById('confirm-delete').addEventListener('click', function () {
-  deleteTransaction(pendingDeleteId);
+  if (pendingConfirmAction) {
+    pendingConfirmAction();
+  }
   confirmDialog.close();
 });
 
@@ -337,9 +365,9 @@ document.getElementById('cancel-delete').addEventListener('click', function () {
   confirmDialog.close();
 });
 
-// בכל סגירה של החלון (כולל מקש Esc) – מאפסים את התנועה הממתינה
+// בכל סגירה של החלון (כולל מקש Esc) – מאפסים את הפעולה הממתינה
 confirmDialog.addEventListener('close', function () {
-  pendingDeleteId = null;
+  pendingConfirmAction = null;
 });
 
 // ===== 6.5 עריכת תנועה =====
@@ -385,7 +413,10 @@ function startEdit(transaction) {
   categorySelect.value = transaction.category;
   dateInput.value = transaction.date;
 
-  // 3. הממשק משתנה למצב עריכה
+  // 3. הממשק משתנה למצב עריכה (אפשרות "תנועה קבועה" לא רלוונטית לעריכה)
+  isRecurringInput.checked = false;
+  recurringOption.hidden = true;
+  updateRecurringHint();
   formTitle.textContent = 'עריכת תנועה';
   submitBtn.textContent = 'שמור שינויים';
 
@@ -406,6 +437,11 @@ function exitEditMode() {
   amountInput.value = '';
   dateInput.value = getTodayString();
   updateCategoryOptions();
+
+  // אפשרות "תנועה קבועה" חוזרת להופיע, לא מסומנת
+  isRecurringInput.checked = false;
+  recurringOption.hidden = false;
+  updateRecurringHint();
 }
 
 // שומרת את השינויים בתנועה שבעריכה
@@ -416,8 +452,11 @@ function saveEdit() {
   });
 
   if (index !== -1) {
-    // מחליפים את התנועה באובייקט חדש עם אותו id והפרטים המעודכנים
+    // מחליפים את התנועה באובייקט חדש עם אותו id והפרטים המעודכנים.
+    // ...transactions[index] מעתיק קודם את כל השדות הקיימים (למשל recurringId),
+    // והשדות שאחריו דורסים רק את מה שנערך בטופס.
     transactions[index] = {
+      ...transactions[index],
       id: editingId,
       type: getSelectedType(),
       description: descriptionInput.value.trim(),
@@ -432,11 +471,14 @@ function saveEdit() {
   render();
 }
 
-// פותחת את החלון להוספת תנועה חדשה, עם הסוג שנבחר (הכנסה/הוצאה)
-function openAddDialog(type) {
+// פותחת את החלון להוספת תנועה חדשה, עם הסוג שנבחר (הכנסה/הוצאה).
+// recurring = true → תיבת "תנועה קבועה" כבר מסומנת
+function openAddDialog(type, recurring) {
   exitEditMode(); // מתחילים מטופס ריק
   document.getElementById('type-' + type).checked = true;
   updateCategoryOptions();
+  isRecurringInput.checked = recurring === true;
+  updateRecurringHint();
   transactionDialog.showModal();
   descriptionInput.focus();
 }
@@ -485,6 +527,14 @@ form.addEventListener('submit', function (event) {
   if (editingId !== null) {
     saveEdit();
     transactionDialog.close();
+    return;
+  }
+
+  // תיבת "תנועה קבועה" מסומנת – יוצרים תנועה קבועה במקום תנועה רגילה
+  if (isRecurringInput.checked) {
+    if (createRecurringFromForm()) {
+      transactionDialog.close();
+    }
     return;
   }
 
@@ -1037,7 +1087,7 @@ document.querySelector('.tabs').addEventListener('keydown', function (event) {
 function getSavedTab() {
   try {
     const saved = localStorage.getItem(TAB_KEY);
-    if (saved === 'transactions' || saved === 'charts' || saved === 'budget') {
+    if (saved === 'transactions' || saved === 'charts' || saved === 'budget' || saved === 'recurring') {
       return saved;
     }
   } catch (error) {
@@ -1045,6 +1095,383 @@ function getSavedTab() {
   }
   return 'transactions';
 }
+
+// ===== 9.7 תנועות קבועות =====
+// "חוק" (rule) לכל תנועה קבועה, למשל: משכורת 12,000 ₪ ב-10 לכל חודש.
+// כשהאפליקציה נפתחת, היא בודקת לכל חוק אם הגיע מועד – ואם כן, מוסיפה תנועה רגילה.
+// מבנה חוק:
+// { id, type, description, amount, category,
+//   day: 10,                  ← יום בחודש
+//   startDate: '2026-11-10',  ← מתי מתחילים
+//   active: true,             ← פעיל או מושהה
+//   lastMonth: '2026-11' }    ← החודש האחרון שכבר טופל (כדי לא להוסיף פעמיים)
+const RECURRING_KEY = 'budget-recurring';
+const MAX_BACKFILL_MONTHS = 24; // לא מאפשרים להתחיל יותר משנתיים אחורה
+
+const isRecurringInput = document.getElementById('is-recurring');
+const recurringOption = document.getElementById('recurring-option');
+const recurringHint = document.getElementById('recurring-hint');
+const dateLabel = document.getElementById('date-label');
+const toastEl = document.getElementById('toast');
+
+function loadRules() {
+  try {
+    const saved = localStorage.getItem(RECURRING_KEY);
+    if (saved === null) {
+      return [];
+    }
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn('לא ניתן לטעון תנועות קבועות:', error);
+    return [];
+  }
+}
+
+function saveRules() {
+  try {
+    localStorage.setItem(RECURRING_KEY, JSON.stringify(rules));
+  } catch (error) {
+    console.warn('לא ניתן לשמור תנועות קבועות:', error);
+  }
+}
+
+let rules = loadRules();
+
+// מזהה ייחודי (אותה שיטה כמו בתנועות)
+function generateId() {
+  return Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+}
+
+// "2026-11" + 2 → "2027-01"
+function addMonths(monthKey, count) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const d = new Date(year, month - 1 + count, 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+// התאריך של החוק בחודש מסוים. יום 31 בחודש קצר → היום האחרון של החודש
+function getRuleDate(monthKey, day) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const lastDay = new Date(year, month, 0).getDate(); // יום 0 של החודש הבא = היום האחרון של החודש הזה
+  return monthKey + '-' + String(Math.min(day, lastDay)).padStart(2, '0');
+}
+
+// הלב של המערכת: מוסיפה את כל התנועות הקבועות שהגיע זמנן. מחזירה כמה נוספו
+function processRecurring() {
+  const todayStr = getTodayString();
+  const currentMonth = todayStr.slice(0, 7);
+  let added = 0;
+
+  rules.forEach(function (rule) {
+    if (!rule.active) {
+      return;
+    }
+    // מתחילים מהחודש שאחרי האחרון שטופל (או מחודש ההתחלה)
+    let month = rule.lastMonth ? addMonths(rule.lastMonth, 1) : rule.startDate.slice(0, 7);
+
+    while (month <= currentMonth) {
+      const date = getRuleDate(month, rule.day);
+      if (date > todayStr) {
+        break; // היום בחודש עוד לא הגיע – ננסה שוב בפעם הבאה
+      }
+      if (date >= rule.startDate) {
+        transactions.push({
+          id: generateId(),
+          type: rule.type,
+          description: rule.description,
+          amount: rule.amount,
+          category: rule.category,
+          date: date,
+          recurringId: rule.id, // כדי לדעת שהתנועה נוצרה אוטומטית
+        });
+        added++;
+      }
+      rule.lastMonth = month; // החודש הזה טופל – לא נוסיף אותו שוב
+      month = addMonths(month, 1);
+    }
+  });
+
+  if (added > 0) {
+    saveTransactions();
+  }
+  saveRules();
+  return added;
+}
+
+// התאריך הבא שבו החוק יוסיף תנועה
+function getNextRuleDate(rule) {
+  let month = rule.lastMonth ? addMonths(rule.lastMonth, 1) : rule.startDate.slice(0, 7);
+  let date = getRuleDate(month, rule.day);
+  if (date < rule.startDate) {
+    date = getRuleDate(addMonths(month, 1), rule.day);
+  }
+  return date;
+}
+
+// כמה תנועות יתווספו מיד, אם מתחילים בתאריך הזה (לחודשים שכבר עברו)
+function countDueOccurrences(startDate) {
+  const todayStr = getTodayString();
+  const day = Number(startDate.slice(8, 10));
+  let month = startDate.slice(0, 7);
+  let count = 0;
+  while (month <= todayStr.slice(0, 7)) {
+    const date = getRuleDate(month, day);
+    if (date >= startDate && date <= todayStr) {
+      count++;
+    }
+    month = addMonths(month, 1);
+  }
+  return count;
+}
+
+// מעדכנת את ההסבר מתחת לתיבת הסימון (וגם את הכיתוב של התאריך והכפתור)
+function updateRecurringHint() {
+  const on = isRecurringInput.checked;
+  dateLabel.textContent = on ? 'תאריך החיוב הראשון' : 'תאריך';
+  if (editingId === null) {
+    submitBtn.textContent = on ? 'הוסף תנועה קבועה' : 'הוסף תנועה';
+  }
+  recurringHint.hidden = !on;
+  if (!on || !dateInput.value) {
+    return;
+  }
+
+  const day = Number(dateInput.value.slice(8, 10));
+  let text = 'תתווסף אוטומטית בכל חודש ב-' + day + ' לחודש';
+  if (day > 28) {
+    text += ' (בחודשים קצרים – ביום האחרון של החודש)';
+  }
+  text += '.';
+  const due = countDueOccurrences(dateInput.value);
+  if (due === 1) {
+    text += ' התנועה הראשונה תתווסף מיד.';
+  } else if (due > 1) {
+    text += ' ' + due + ' תנועות יתווספו מיד – עבור החודשים שכבר עברו.';
+  }
+  recurringHint.textContent = text;
+}
+
+isRecurringInput.addEventListener('change', updateRecurringHint);
+dateInput.addEventListener('change', updateRecurringHint);
+
+// יוצרת חוק חדש מהטופס. מחזירה true אם הצליח
+function createRecurringFromForm() {
+  const startDate = dateInput.value;
+  const oldest = addMonths(getTodayString().slice(0, 7), -MAX_BACKFILL_MONTHS);
+  if (startDate.slice(0, 7) < oldest) {
+    recurringHint.hidden = false;
+    recurringHint.textContent = '⚠ תאריך ההתחלה רחוק מדי – אפשר להתחיל עד ' + MAX_BACKFILL_MONTHS + ' חודשים אחורה.';
+    return false;
+  }
+
+  const rule = {
+    id: generateId(),
+    type: getSelectedType(),
+    description: descriptionInput.value.trim(),
+    amount: parseFloat(amountInput.value),
+    category: categorySelect.value,
+    day: Number(startDate.slice(8, 10)),
+    startDate: startDate,
+    active: true,
+    lastMonth: null,
+  };
+  rules.push(rule);
+  saveRules();
+
+  const added = processRecurring(); // מוסיפה מיד את מה שכבר הגיע זמנו
+  render();
+
+  if (added > 0) {
+    showToast('🔁 נוצרה תנועה קבועה. נוספו ' + added + ' תנועות עד היום.');
+  } else {
+    showToast('🔁 נוצרה תנועה קבועה. הראשונה תתווסף ב-' + formatDate(getNextRuleDate(rule)) + '.');
+  }
+  return true;
+}
+
+// ----- ניהול החוקים בלשונית "קבועות" -----
+function findRule(id) {
+  return rules.find(function (r) {
+    return r.id === id;
+  });
+}
+
+function toggleRule(id) {
+  const rule = findRule(id);
+  if (!rule) {
+    return;
+  }
+  rule.active = !rule.active;
+
+  // בהפעלה מחדש לא משלימים את החודשים שבהם החוק היה מושהה – ממשיכים מהחודש הנוכחי
+  if (rule.active) {
+    const previousMonth = addMonths(getTodayString().slice(0, 7), -1);
+    if (rule.startDate.slice(0, 7) <= previousMonth && (!rule.lastMonth || rule.lastMonth < previousMonth)) {
+      rule.lastMonth = previousMonth;
+    }
+  }
+  saveRules();
+  const added = processRecurring();
+  render();
+  if (added > 0) {
+    showToast('🔁 נוספו ' + added + ' תנועות קבועות.');
+  }
+}
+
+function updateRuleAmount(id, value) {
+  const rule = findRule(id);
+  const amount = parseFloat(value);
+  if (rule && amount > 0) {
+    rule.amount = amount; // חל רק מהפעם הבאה – תנועות שכבר נוספו לא משתנות
+    saveRules();
+  }
+  renderRecurring();
+}
+
+function updateRuleDay(id, value) {
+  const rule = findRule(id);
+  const day = parseInt(value, 10);
+  if (rule && day >= 1 && day <= 31) {
+    rule.day = day;
+    saveRules();
+    const added = processRecurring(); // אם היום החדש כבר עבר החודש – התנועה תתווסף עכשיו
+    render();
+    if (added > 0) {
+      showToast('🔁 נוספו ' + added + ' תנועות קבועות.');
+    }
+    return;
+  }
+  renderRecurring(); // ערך לא תקין – מחזירים את הערך הקודם
+}
+
+function askToDeleteRule(rule) {
+  askConfirm({
+    title: 'מחיקת תנועה קבועה',
+    kind: 'התנועה הקבועה',
+    text: '"' + rule.description + '" (' + formatMoney(rule.amount) + ')',
+    note: 'תנועות שכבר נוספו יישארו בטבלה. רק התוספות העתידיות ייפסקו.',
+    action: function () {
+      rules = rules.filter(function (r) {
+        return r.id !== rule.id;
+      });
+      saveRules();
+      render();
+    },
+  });
+}
+
+// בונה את רשימת החוקים בלשונית
+function renderRecurring() {
+  const list = document.getElementById('recurring-list');
+  list.innerHTML = '';
+
+  if (rules.length === 0) {
+    list.appendChild(createEl('p', 'recurring-empty',
+      'עדיין אין תנועות קבועות. לחץ "+ תנועה קבועה" או סמן 🔁 בחלון ההוספה.'));
+    return;
+  }
+
+  rules.forEach(function (rule) {
+    const card = createEl('div', 'rule-card ' + rule.type + (rule.active ? '' : ' paused'));
+
+    // שורה עליונה: שם + סכום
+    const top = createEl('div', 'rule-top');
+    const sign = rule.type === 'income' ? '+' : '-';
+    top.append(
+      createEl('span', 'rule-name', rule.description),
+      createEl('span', 'rule-amount ' + rule.type, sign + formatMoney(rule.amount))
+    );
+
+    // פרטים: קטגוריה, מתי, סטטוס
+    const info = createEl('div', 'rule-info');
+    info.append(
+      createEl('span', 'category-badge', rule.category),
+      createEl('span', null, 'כל חודש ב-' + rule.day + ' לחודש'),
+      createEl('span', null, rule.active ? '· הבא: ' + formatDate(getNextRuleDate(rule)) : '· מושהית'),
+      createEl('span', 'rule-status', rule.active ? 'פעילה' : 'מושהית')
+    );
+
+    // עריכה מהירה: סכום, יום, השהיה ומחיקה
+    const edit = createEl('div', 'rule-edit');
+
+    const amountLabel = createEl('label', null, 'סכום:');
+    const amountField = document.createElement('input');
+    amountField.type = 'number';
+    amountField.min = '0.01';
+    amountField.step = '0.01';
+    amountField.value = rule.amount;
+    amountField.className = 'rule-amount-input';
+    amountField.setAttribute('aria-label', 'סכום עבור ' + rule.description);
+    amountField.addEventListener('change', function () {
+      updateRuleAmount(rule.id, amountField.value);
+    });
+    amountLabel.appendChild(amountField);
+
+    const dayLabel = createEl('label', null, 'יום בחודש:');
+    const dayField = document.createElement('input');
+    dayField.type = 'number';
+    dayField.min = '1';
+    dayField.max = '31';
+    dayField.value = rule.day;
+    dayField.className = 'rule-day-input';
+    dayField.setAttribute('aria-label', 'יום בחודש עבור ' + rule.description);
+    dayField.addEventListener('change', function () {
+      updateRuleDay(rule.id, dayField.value);
+    });
+    dayLabel.appendChild(dayField);
+
+    const actions = createEl('div', 'rule-actions');
+    const toggleBtn = createEl('button', null, rule.active ? '⏸ השהה' : '▶ הפעל');
+    toggleBtn.type = 'button';
+    toggleBtn.addEventListener('click', function () {
+      toggleRule(rule.id);
+    });
+    const deleteBtn = createEl('button', 'rule-delete', '🗑');
+    deleteBtn.type = 'button';
+    deleteBtn.title = 'מחק תנועה קבועה';
+    deleteBtn.setAttribute('aria-label', 'מחק את התנועה הקבועה ' + rule.description);
+    deleteBtn.addEventListener('click', function () {
+      askToDeleteRule(rule);
+    });
+    actions.append(toggleBtn, deleteBtn);
+
+    edit.append(amountLabel, dayLabel, actions);
+    card.append(top, info, edit);
+    list.appendChild(card);
+  });
+}
+
+document.getElementById('add-recurring').addEventListener('click', function () {
+  openAddDialog('expense', true);
+});
+
+// ----- הודעה קופצת -----
+let toastTimer = null;
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () {
+    toastEl.hidden = true;
+  }, 4500);
+}
+
+// בודקת תנועות קבועות ומציגה הודעה אם נוספו
+function runRecurringCheck() {
+  const added = processRecurring();
+  if (added > 0) {
+    render();
+    showToast('🔁 נוספו ' + added + ' תנועות קבועות.');
+  }
+}
+
+// אם האפליקציה נשארה פתוחה ברקע (למשל בטלפון) – בודקים שוב כשחוזרים אליה
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden) {
+    runRecurringCheck();
+  }
+});
 
 // ===== 10. הפעלה ראשונית =====
 showTab(getSavedTab());
@@ -1057,4 +1484,6 @@ dateInput.value = [
   String(today.getDate()).padStart(2, '0'),
 ].join('-');
 updateCategoryOptions();
+updateRecurringHint();
 render();
+runRecurringCheck(); // מוסיפה תנועות קבועות שהגיע זמנן (ומציגה הודעה אם נוספו)

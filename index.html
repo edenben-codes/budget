@@ -55,6 +55,7 @@
         <button type="button" class="tab" role="tab" id="tab-btn-transactions" data-tab="transactions" aria-controls="tab-transactions" aria-selected="true">📋 תנועות</button>
         <button type="button" class="tab" role="tab" id="tab-btn-charts" data-tab="charts" aria-controls="tab-charts" aria-selected="false">📊 גרפים</button>
         <button type="button" class="tab" role="tab" id="tab-btn-budget" data-tab="budget" aria-controls="tab-budget" aria-selected="false">🎯 תקציב</button>
+        <button type="button" class="tab" role="tab" id="tab-btn-recurring" data-tab="recurring" aria-controls="tab-recurring" aria-selected="false">🔁 קבועות</button>
       </nav>
     </div>
 
@@ -150,6 +151,18 @@
       <div class="budget-list" id="budget-list"></div>
     </section>
 
+    <!-- לשונית 4: תנועות קבועות (מתווספות אוטומטית כל חודש) -->
+    <section class="panel tab-panel recurring" role="tabpanel" id="tab-recurring" aria-labelledby="tab-btn-recurring" hidden>
+      <div class="recurring-header">
+        <div>
+          <h2>תנועות קבועות</h2>
+          <p class="chart-subtitle">הכנסות והוצאות שחוזרות כל חודש מתווספות לבד בתאריך שהגדרת – בכל פעם שהאפליקציה נפתחת.</p>
+        </div>
+        <button type="button" class="btn-reset" id="add-recurring">+ תנועה קבועה</button>
+      </div>
+      <div class="recurring-list" id="recurring-list"></div>
+    </section>
+
   </div>
 
   <!-- חלון הוספה/עריכה של תנועה. הטופס זהה לטופס הקודם – רק עבר לתוך חלון -->
@@ -184,9 +197,18 @@
       </label>
 
       <label class="field">
-        <span>תאריך</span>
+        <span id="date-label">תאריך</span>
         <input type="date" id="date" required>
       </label>
+
+      <!-- אפשרות נוספת: תנועה קבועה. מוסתרת במצב עריכה -->
+      <div class="recurring-option" id="recurring-option">
+        <label class="recurring-toggle">
+          <input type="checkbox" id="is-recurring">
+          <span>🔁 תנועה קבועה – להוסיף אוטומטית כל חודש</span>
+        </label>
+        <p class="recurring-hint" id="recurring-hint" hidden></p>
+      </div>
 
       <div class="dialog-actions">
         <button type="submit" class="btn-submit" id="submit-btn">הוסף תנועה</button>
@@ -197,14 +219,17 @@
 
   <!-- חלון אישור מחיקה. <dialog> הוא אלמנט מובנה בדפדפן לחלונות קופצים -->
   <dialog id="confirm-dialog" class="dialog">
-    <h3>מחיקת תנועה</h3>
-    <p>האם למחוק את התנועה <strong id="confirm-text"></strong>?</p>
-    <p class="dialog-note">אי אפשר לבטל את הפעולה הזו.</p>
+    <h3 id="confirm-title">מחיקת תנועה</h3>
+    <p>האם למחוק את <span id="confirm-kind">התנועה</span> <strong id="confirm-text"></strong>?</p>
+    <p class="dialog-note" id="confirm-note">אי אפשר לבטל את הפעולה הזו.</p>
     <div class="dialog-actions">
       <button type="button" class="btn-danger" id="confirm-delete">מחק</button>
       <button type="button" class="btn-secondary" id="cancel-delete">ביטול</button>
     </div>
   </dialog>
+
+  <!-- הודעה קופצת קטנה (למשל: "נוספו 2 תנועות קבועות"). aria-live מקריא אותה לקוראי מסך -->
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <!-- את הסקריפט טוענים בסוף, אחרי שכל האלמנטים בדף כבר קיימים -->
   <script src="script.js"></script>
