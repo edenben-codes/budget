@@ -11,7 +11,53 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
+  <!-- מסך טעינה – מוצג עד ש-Firebase בודק אם המשתמש כבר מחובר -->
+  <div class="auth-loading" id="auth-loading">⏳ טוען…</div>
+
+  <!-- מסך כניסה והרשמה – מוצג כשאין משתמש מחובר -->
+  <div class="auth-screen" id="auth-screen" hidden>
+    <div class="auth-card">
+      <h1>💰 ניהול תקציב אישי</h1>
+      <p class="auth-subtitle" id="auth-subtitle">היכנס לחשבון שלך</p>
+
+      <div class="auth-tabs" role="tablist" aria-label="כניסה או הרשמה">
+        <button type="button" class="auth-tab" id="auth-tab-login" role="tab" aria-selected="true">כניסה</button>
+        <button type="button" class="auth-tab" id="auth-tab-signup" role="tab" aria-selected="false">הרשמה</button>
+      </div>
+
+      <form id="auth-form" novalidate>
+        <label class="field">
+          <span>מייל</span>
+          <input type="email" id="auth-email" autocomplete="email" dir="ltr" required>
+        </label>
+        <label class="field">
+          <span>סיסמה</span>
+          <input type="password" id="auth-password" autocomplete="current-password" dir="ltr" required>
+        </label>
+        <label class="field" id="auth-confirm-field" hidden>
+          <span>אימות סיסמה</span>
+          <input type="password" id="auth-password-confirm" autocomplete="new-password" dir="ltr">
+        </label>
+
+        <!-- role="alert" – קוראי מסך מקריאים את השגיאה מיד -->
+        <p class="auth-error" id="auth-error" role="alert" hidden></p>
+        <p class="auth-success" id="auth-success" role="status" hidden></p>
+
+        <button type="submit" class="btn-submit" id="auth-submit">כניסה</button>
+        <button type="button" class="link-btn" id="forgot-password">שכחתי סיסמה</button>
+      </form>
+
+      <p class="auth-note">🔒 הסיסמה נשמרת מוצפנת אצל Google (Firebase) – אף אחד, כולל מפתח האפליקציה, לא יכול לראות אותה.</p>
+    </div>
+  </div>
+
+  <div class="container" id="app-root" hidden>
+
+    <!-- שורת המשתמש המחובר -->
+    <div class="user-bar">
+      <span>👤 <span id="user-email" dir="ltr"></span></span>
+      <button type="button" class="link-btn" id="logout-btn">התנתק</button>
+    </div>
 
     <!-- כותרת עליונה + כפתורי הוספה -->
     <header class="header">
@@ -248,5 +294,7 @@
 
   <!-- את הסקריפט טוענים בסוף, אחרי שכל האלמנטים בדף כבר קיימים -->
   <script src="script.js"></script>
+  <!-- type="module" – מאפשר להשתמש ב-import (טעינת Firebase והגדרות מקבצים אחרים) -->
+  <script type="module" src="auth.js"></script>
 </body>
 </html>
