@@ -1769,17 +1769,28 @@ window.budgetApp = {
     return rules;
   },
 
-  // מוחקת את כל התנועות (אחרי אימות סיסמה ב-auth.js). תקציבים ותנועות קבועות נשארים.
-  // התנועות הקבועות לא יוסיפו מחדש את מה שנמחק – הן זוכרות אילו חודשים כבר טופלו.
-  deleteAllTransactions: function () {
+  // כמה נתונים יש מכל סוג (כדי להציג בחלון האישור)
+  countAllData: function () {
+    return {
+      transactions: transactions.length,
+      budgets: Object.keys(budgets).length,
+      recurring: rules.length,
+    };
+  },
+
+  // מוחקת את כל הנתונים – תנועות, תקציבים ותנועות קבועות (אחרי אימות סיסמה ב-auth.js).
+  // החשבון עצמו נשאר, כך שאפשר להתחיל מאפס.
+  deleteAllData: function () {
     if (editingId !== null) {
       exitEditMode();
     }
-    const count = transactions.length;
     transactions = [];
+    budgets = {};
+    rules = [];
     saveTransactions();
+    saveBudgets();
+    saveRules();
     render();
-    return count;
   },
 
   // שומרת הכול בענן (משמש בהעברת נתונים ישנים)

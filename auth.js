@@ -394,21 +394,23 @@ document.getElementById('delete-account-btn').addEventListener('click', function
   });
 });
 
-// פעולה 2: מחיקת כל התנועות (התקציבים והתנועות הקבועות נשארים)
+// פעולה 2: מחיקת כל הנתונים – תנועות, תקציבים ותנועות קבועות (החשבון נשאר)
 document.getElementById('delete-all-transactions').addEventListener('click', function () {
-  const count = window.budgetApp.getData('transactions').length;
-  if (count === 0) {
-    window.budgetApp.showToast('אין תנועות למחיקה.');
+  const counts = window.budgetApp.countAllData();
+  if (counts.transactions + counts.budgets + counts.recurring === 0) {
+    window.budgetApp.showToast('אין נתונים למחיקה.');
     return;
   }
   openPasswordDialog({
-    title: 'מחיקת כל התנועות',
-    message: 'הפעולה תמחק את כל ' + count + ' התנועות שלך – מהענן ומכל המכשירים. התקציבים והתנועות הקבועות יישארו.',
+    title: 'מחיקת כל הנתונים',
+    message: 'הפעולה תמחק את כל הנתונים שלך – מהענן ומכל המכשירים: ' +
+      counts.transactions + ' תנועות, ' + counts.budgets + ' תקציבים ו-' + counts.recurring +
+      ' תנועות קבועות. החשבון עצמו יישאר, ותוכל להתחיל מאפס.',
     note: 'אי אפשר לבטל את הפעולה הזו. מומלץ להוריד גיבוי קודם – אפשר לשחזר ממנו אחר כך.',
-    confirmLabel: 'מחק את כל התנועות',
+    confirmLabel: 'מחק את כל הנתונים',
     action: async function () {
-      const deleted = window.budgetApp.deleteAllTransactions();
-      window.budgetApp.showToast('🗑 נמחקו ' + deleted + ' תנועות.');
+      window.budgetApp.deleteAllData();
+      window.budgetApp.showToast('🗑 כל הנתונים נמחקו.');
     },
   });
 });
