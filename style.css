@@ -1294,6 +1294,43 @@ tr.import-excluded {
   z-index: 10;
 }
 
+/* ===== תיקונים לטלפונים (במיוחד אייפון / Safari) ===== */
+/* Safari באייפון לא מגדיל טקסט לבד כשמסובבים את הטלפון */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+/* רשת ביטחון: גם אם משהו רחב מדי – הדף עצמו לא ייגלל הצידה */
+html,
+body {
+  overflow-x: clip;
+}
+/* אף שדה לא יכול להיות רחב יותר מהמסגרת שלו */
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+.field input,
+.field select {
+  min-width: 0;
+  width: 100%;
+}
+/* @supports (-webkit-touch-callout: none) – חל רק על אייפון/אייפד.
+   שם שדות תאריך מסרבים להתכווץ ודוחפים את הדף לרוחב – כאן מבטלים את העיצוב המובנה שלהם */
+@supports (-webkit-touch-callout: none) {
+  input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-height: 42px;
+    text-align: right;
+  }
+}
+/* שורת המשתמש יורדת שורה במסכים צרים מאוד, במקום לחרוג מהמסך */
+.user-bar {
+  flex-wrap: wrap;
+}
+
 /* ===== התאמה למסכים קטנים (Responsive) ===== */
 @media (max-width: 900px) {
   .summary,
