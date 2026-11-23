@@ -8,7 +8,10 @@
   <!-- גופן עברי מודרני מ-Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <!-- ?v= – מספר גרסה. משנים אותו בכל עדכון, כדי שהדפדפן יוריד את הקבצים החדשים ולא ישתמש בעותק ישן -->
+  <link rel="stylesheet" href="style.css?v=20261124">
+
+
 </head>
 <body>
   <!-- מסך טעינה – מוצג עד ש-Firebase בודק אם המשתמש כבר מחובר -->
@@ -419,10 +422,10 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <!-- את הסקריפט טוענים בסוף, אחרי שכל האלמנטים בדף כבר קיימים -->
-  <script src="script.js"></script>
+  <script src="script.js?v=20261124"></script>
   <!-- ייבוא מקובץ – משתמש בפונקציות ובנתונים של script.js, ולכן נטען אחריו -->
-  <script src="import.js"></script>
+  <script src="import.js?v=20261124"></script>
   <!-- type="module" – מאפשר להשתמש ב-import (טעינת Firebase והגדרות מקבצים אחרים) -->
-  <script type="module" src="auth.js"></script>
+  <script type="module" src="auth.js?v=20261124"></script>
 </body>
 </html>
