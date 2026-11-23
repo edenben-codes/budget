@@ -1002,6 +1002,24 @@ tbody tr.editing:hover {
   color: var(--expense);
 }
 
+/* ===== גיבוי ושחזור ===== */
+.backup-bar {
+  margin-top: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.backup-bar h2 {
+  margin-bottom: 4px;
+}
+.backup-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* ===== הודעה קופצת (Toast) ===== */
 .toast {
   position: fixed;

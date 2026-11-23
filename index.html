@@ -163,6 +163,21 @@
       <div class="recurring-list" id="recurring-list"></div>
     </section>
 
+    <!-- גיבוי ושחזור – תמיד מוצג בתחתית הדף -->
+    <section class="panel backup-bar" aria-labelledby="backup-title">
+      <div>
+        <h2 id="backup-title">💾 גיבוי הנתונים</h2>
+        <p class="chart-subtitle">הנתונים שמורים רק בדפדפן הזה. כדאי להוריד גיבוי מדי פעם – ואפשר לשחזר ממנו בכל מכשיר.</p>
+      </div>
+      <div class="backup-actions">
+        <button type="button" class="btn-reset" id="export-backup">⬇ הורד גיבוי</button>
+        <button type="button" class="btn-reset" id="import-backup">⬆ שחזר מגיבוי</button>
+        <button type="button" class="btn-reset" id="export-csv">📄 ייצוא לאקסל</button>
+        <!-- שדה בחירת קובץ מוסתר – הכפתור "שחזר מגיבוי" פותח אותו -->
+        <input type="file" id="import-file" accept=".json,application/json" hidden>
+      </div>
+    </section>
+
   </div>
 
   <!-- חלון הוספה/עריכה של תנועה. הטופס זהה לטופס הקודם – רק עבר לתוך חלון -->

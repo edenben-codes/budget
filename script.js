@@ -324,6 +324,8 @@ function askConfirm(options) {
   document.getElementById('confirm-kind').textContent = options.kind;
   confirmText.textContent = options.text;
   document.getElementById('confirm-note').textContent = options.note;
+  // הכיתוב של כפתור האישור (ברירת מחדל: "מחק")
+  document.getElementById('confirm-delete').textContent = options.confirmLabel || 'מחק';
   pendingConfirmAction = options.action;
   confirmDialog.showModal(); // showModal חוסם את שאר הדף עד שסוגרים את החלון
 }
@@ -1471,6 +1473,214 @@ document.addEventListener('visibilitychange', function () {
   if (!document.hidden) {
     runRecurringCheck();
   }
+});
+
+// ===== 9.8 גיבוי, שחזור וייצוא לאקסל =====
+const BACKUP_APP_ID = 'budget-app'; // "חתימה" שמזהה שהקובץ שייך לאפליקציה הזו
+const BACKUP_VERSION = 1;
+const MAX_BACKUP_SIZE = 5 * 1024 * 1024; // 5MB – קובץ גדול מזה כנראה לא גיבוי שלנו
+
+// מורידה קובץ למחשב: יוצרים "קישור" זמני לתוכן ולוחצים עליו בקוד
+function downloadFile(content, fileName, mimeType) {
+  const blob = new Blob([content], { type: mimeType }); // Blob = "חתיכת נתונים" בזיכרון
+  const url = URL.createObjectURL(blob);                // כתובת זמנית לנתונים האלה
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName; // download אומר לדפדפן להוריד במקום לפתוח
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(function () {
+    URL.revokeObjectURL(url); // משחררים את הזיכרון
+  }, 1000);
+}
+
+// כל הנתונים באובייקט אחד
+function buildBackup() {
+  return {
+    app: BACKUP_APP_ID,
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    transactions: transactions,
+    budgets: budgets,
+    recurring: rules,
+  };
+}
+
+document.getElementById('export-backup').addEventListener('click', function () {
+  // JSON.stringify(..., null, 2) – טקסט עם רווחים, קריא גם לבני אדם
+  const json = JSON.stringify(buildBackup(), null, 2);
+  downloadFile(json, 'budget-backup-' + getTodayString() + '.json', 'application/json');
+  showToast('💾 הגיבוי ירד – ' + transactions.length + ' תנועות.');
+});
+
+// ----- ייצוא לאקסל (CSV) -----
+// תא בטבלה: עוטפים במירכאות, ומכפילים מירכאות שבתוך הטקסט
+function csvCell(value) {
+  let text = String(value);
+  // הגנה: טקסט שמתחיל ב- = + - @ אקסל עלול להריץ כנוסחה – מוסיפים לפניו גרש
+  if (/^[=+\-@]/.test(text)) {
+    text = "'" + text;
+  }
+  return '"' + text.replace(/"/g, '""') + '"';
+}
+
+document.getElementById('export-csv').addEventListener('click', function () {
+  const header = ['תאריך', 'סוג', 'תיאור', 'קטגוריה', 'סכום'];
+  const sorted = [...transactions].sort(function (a, b) {
+    return a.date.localeCompare(b.date);
+  });
+  const lines = [header.map(csvCell).join(',')];
+  sorted.forEach(function (t) {
+    // הוצאה כמספר שלילי – כך אפשר לסכם באקסל ישירות
+    const signed = t.type === 'income' ? t.amount : -t.amount;
+    lines.push([
+      csvCell(formatDate(t.date)),
+      csvCell(t.type === 'income' ? 'הכנסה' : 'הוצאה'),
+      csvCell(t.description),
+      csvCell(t.category),
+      signed, // מספר – בלי מירכאות, כדי שאקסל יזהה אותו כמספר
+    ].join(','));
+  });
+  // ﻿ (BOM) בתחילת הקובץ – בלעדיו אקסל מציג עברית כג'יבריש
+  downloadFile('﻿' + lines.join('\r\n'), 'budget-' + getTodayString() + '.csv', 'text/csv;charset=utf-8');
+  showToast('📄 הקובץ לאקסל ירד – ' + transactions.length + ' תנועות.');
+});
+
+// ----- שחזור מגיבוי -----
+// בדיקות תקינות: מקבלים רק נתונים שנראים בדיוק כמו שהאפליקציה יוצרת
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;   // 2026-11-23
+const MONTH_PATTERN = /^\d{4}-\d{2}$/;        // 2026-11
+
+function isText(value) {
+  return typeof value === 'string' && value.trim() !== '' && value.length <= 200;
+}
+function isPositiveNumber(value) {
+  return typeof value === 'number' && isFinite(value) && value > 0;
+}
+function isValidTransaction(t) {
+  return t !== null && typeof t === 'object' &&
+    isText(String(t.id)) &&
+    (t.type === 'income' || t.type === 'expense') &&
+    isText(t.description) && isText(t.category) &&
+    isPositiveNumber(t.amount) &&
+    typeof t.date === 'string' && DATE_PATTERN.test(t.date);
+}
+function isValidRule(r) {
+  return r !== null && typeof r === 'object' &&
+    isText(String(r.id)) &&
+    (r.type === 'income' || r.type === 'expense') &&
+    isText(r.description) && isText(r.category) &&
+    isPositiveNumber(r.amount) &&
+    Number.isInteger(r.day) && r.day >= 1 && r.day <= 31 &&
+    typeof r.startDate === 'string' && DATE_PATTERN.test(r.startDate) &&
+    typeof r.active === 'boolean' &&
+    (r.lastMonth === null || (typeof r.lastMonth === 'string' && MONTH_PATTERN.test(r.lastMonth)));
+}
+
+// בודקת קובץ גיבוי ומחזירה רק את מה שתקין (או null אם זה לא גיבוי שלנו)
+function parseBackup(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    return null;
+  }
+  if (data === null || typeof data !== 'object' || data.app !== BACKUP_APP_ID || !Array.isArray(data.transactions)) {
+    return null;
+  }
+
+  const result = { transactions: [], budgets: {}, recurring: [], skipped: 0, exportedAt: data.exportedAt };
+
+  data.transactions.forEach(function (t) {
+    if (isValidTransaction(t)) {
+      // לוקחים רק את השדות המוכרים – שום דבר נוסף לא נכנס
+      const clean = { id: String(t.id), type: t.type, description: t.description, amount: t.amount, category: t.category, date: t.date };
+      if (t.recurringId) {
+        clean.recurringId = String(t.recurringId);
+      }
+      result.transactions.push(clean);
+    } else {
+      result.skipped++;
+    }
+  });
+
+  if (data.budgets !== null && typeof data.budgets === 'object' && !Array.isArray(data.budgets)) {
+    Object.keys(data.budgets).forEach(function (name) {
+      if (isText(name) && isPositiveNumber(data.budgets[name])) {
+        result.budgets[name] = data.budgets[name];
+      }
+    });
+  }
+
+  if (Array.isArray(data.recurring)) {
+    data.recurring.forEach(function (r) {
+      if (isValidRule(r)) {
+        result.recurring.push({
+          id: String(r.id), type: r.type, description: r.description, amount: r.amount,
+          category: r.category, day: r.day, startDate: r.startDate, active: r.active, lastMonth: r.lastMonth,
+        });
+      } else {
+        result.skipped++;
+      }
+    });
+  }
+  return result;
+}
+
+const importFileInput = document.getElementById('import-file');
+
+// הכפתור הגלוי פותח את בחירת הקובץ המוסתרת
+document.getElementById('import-backup').addEventListener('click', function () {
+  importFileInput.click();
+});
+
+importFileInput.addEventListener('change', async function () {
+  const file = importFileInput.files[0];
+  importFileInput.value = ''; // כדי שאפשר יהיה לבחור שוב את אותו קובץ
+  if (!file) {
+    return;
+  }
+  if (file.size > MAX_BACKUP_SIZE) {
+    showToast('⚠ הקובץ גדול מדי – זה לא נראה כמו גיבוי של האפליקציה.');
+    return;
+  }
+
+  // await – מחכים שהדפדפן יסיים לקרוא את הקובץ, ורק אז ממשיכים
+  const text = await file.text();
+  const backup = parseBackup(text);
+  if (backup === null) {
+    showToast('⚠ זה לא קובץ גיבוי של האפליקציה. שום דבר לא השתנה.');
+    return;
+  }
+
+  const when = backup.exportedAt && DATE_PATTERN.test(String(backup.exportedAt).slice(0, 10))
+    ? ' מ-' + formatDate(String(backup.exportedAt).slice(0, 10))
+    : '';
+  askConfirm({
+    title: 'שחזור מגיבוי',
+    kind: 'הנתונים הנוכחיים ולהחליף אותם בגיבוי' + when,
+    text: '(' + backup.transactions.length + ' תנועות, ' + Object.keys(backup.budgets).length +
+      ' תקציבים, ' + backup.recurring.length + ' תנועות קבועות)',
+    note: 'כל הנתונים שיש עכשיו בדפדפן יוחלפו. אם אתה לא בטוח – הורד קודם גיבוי של המצב הנוכחי.' +
+      (backup.skipped > 0 ? ' ' + backup.skipped + ' רשומות לא תקינות בקובץ ידולגו.' : ''),
+    confirmLabel: 'שחזר',
+    action: function () {
+      if (editingId !== null) {
+        exitEditMode();
+      }
+      transactions = backup.transactions;
+      budgets = backup.budgets;
+      rules = backup.recurring;
+      saveTransactions();
+      saveBudgets();
+      saveRules();
+      const added = processRecurring(); // משלימים תנועות קבועות מאז תאריך הגיבוי
+      render();
+      showToast('✅ הנתונים שוחזרו – ' + transactions.length + ' תנועות' +
+        (added > 0 ? ' (כולל ' + added + ' תנועות קבועות חדשות)' : '') + '.');
+    },
+  });
 });
 
 // ===== 10. הפעלה ראשונית =====
