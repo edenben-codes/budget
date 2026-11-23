@@ -57,6 +57,7 @@
     <div class="user-bar">
       <span>👤 <span id="user-email" dir="ltr"></span></span>
       <button type="button" class="link-btn" id="logout-btn">התנתק</button>
+      <button type="button" class="link-btn danger-link" id="delete-account-btn">מחק חשבון</button>
     </div>
 
     <!-- כותרת עליונה + כפתורי הוספה -->
@@ -286,6 +287,23 @@
     <div class="dialog-actions">
       <button type="button" class="btn-danger" id="confirm-delete">מחק</button>
       <button type="button" class="btn-secondary" id="cancel-delete">ביטול</button>
+    </div>
+  </dialog>
+
+  <!-- חלון מחיקת חשבון. הקוד שלו נמצא ב-auth.js -->
+  <dialog id="delete-account-dialog" class="dialog delete-account-dialog" aria-labelledby="delete-account-title">
+    <h3 id="delete-account-title">מחיקת החשבון</h3>
+    <p>הפעולה תמחק <strong>לצמיתות</strong> את החשבון שלך ואת כל הנתונים שלו מהענן: תנועות, תקציבים ותנועות קבועות.</p>
+    <p class="dialog-note">אי אפשר לבטל את הפעולה הזו. מומלץ להוריד גיבוי קודם.</p>
+    <button type="button" class="btn-reset" id="delete-account-backup">⬇ הורד גיבוי קודם</button>
+    <label class="field">
+      <span>כדי לאשר, הקלד את הסיסמה שלך</span>
+      <input type="password" id="delete-account-password" autocomplete="current-password" dir="ltr">
+    </label>
+    <p class="auth-error" id="delete-account-error" role="alert" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn-danger" id="delete-account-confirm">מחק לצמיתות</button>
+      <button type="button" class="btn-secondary" id="delete-account-cancel">ביטול</button>
     </div>
   </dialog>
 

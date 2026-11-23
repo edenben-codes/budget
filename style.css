@@ -1112,6 +1112,32 @@ tbody tr.editing:hover {
   cursor: wait;
 }
 
+/* קישור "מחק חשבון" – אדום, כדי שיהיה ברור שזו פעולה מסוכנת */
+.danger-link {
+  color: var(--expense);
+}
+
+/* חלון מחיקת חשבון */
+.delete-account-dialog {
+  width: min(420px, calc(100% - 32px));
+}
+.delete-account-dialog p {
+  margin-bottom: 8px;
+}
+.delete-account-dialog .btn-reset {
+  margin: 6px 0 14px;
+}
+.delete-account-dialog .field {
+  margin-bottom: 10px;
+}
+.delete-account-dialog input[dir="ltr"] {
+  text-align: left;
+}
+#delete-account-confirm:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 /* שורת המשתמש המחובר בראש האפליקציה */
 .user-bar {
   display: flex;

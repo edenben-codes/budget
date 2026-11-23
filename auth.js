@@ -10,6 +10,9 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  deleteUser,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   initializeFirestore,
@@ -17,6 +20,7 @@ import {
   persistentMultipleTabManager,
   doc,
   setDoc,
+  deleteDoc,
   onSnapshot,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -316,6 +320,90 @@ function handleFirstLoad(values) {
   showApp();
 }
 
+// ===== מחיקת חשבון =====
+// כל משתמש יכול למחוק את החשבון שלו ואת כל הנתונים שלו – בלי לבקש מאף אחד.
+const deleteDialog = document.getElementById('delete-account-dialog');
+const deletePassword = document.getElementById('delete-account-password');
+const deleteError = document.getElementById('delete-account-error');
+const deleteConfirmBtn = document.getElementById('delete-account-confirm');
+let accountJustDeleted = false; // כדי להציג הודעה במסך הכניסה אחרי המחיקה
+
+function closeDeleteDialog() {
+  deletePassword.value = '';
+  deleteError.hidden = true;
+  deleteDialog.close();
+}
+
+document.getElementById('delete-account-btn').addEventListener('click', function () {
+  deletePassword.value = '';
+  deleteError.hidden = true;
+  deleteConfirmBtn.disabled = false;
+  deleteDialog.showModal();
+  deletePassword.focus();
+});
+
+// "הורד גיבוי קודם" – משתמש בכפתור הגיבוי הקיים של האפליקציה
+document.getElementById('delete-account-backup').addEventListener('click', function () {
+  document.getElementById('export-backup').click();
+});
+
+document.getElementById('delete-account-cancel').addEventListener('click', closeDeleteDialog);
+deleteDialog.addEventListener('cancel', function (event) {
+  event.preventDefault(); // Esc – סוגרים בעצמנו, כדי לנקות את שדה הסיסמה
+  closeDeleteDialog();
+});
+
+deleteConfirmBtn.addEventListener('click', async function () {
+  if (deletePassword.value === '') {
+    deleteError.textContent = 'צריך להקליד את הסיסמה.';
+    deleteError.hidden = false;
+    return;
+  }
+  const user = auth.currentUser;
+  if (!user) {
+    closeDeleteDialog();
+    return;
+  }
+
+  deleteConfirmBtn.disabled = true;
+  deleteError.hidden = true;
+  try {
+    // 1. אימות מחדש: Firebase מוחק חשבון רק אם הסיסמה הוקלדה זה עתה
+    const credential = EmailAuthProvider.credential(user.email, deletePassword.value);
+    await reauthenticateWithCredential(user, credential);
+
+    // 2. מפסיקים להאזין לענן ולשמור – כדי ששום דבר לא ייכתב מחדש אחרי המחיקה
+    stopSync();
+    window.budgetApp.setCloudSaver(null);
+
+    // 3. מוחקים את כל הנתונים מהענן (חייבים לעשות את זה לפני מחיקת החשבון – אחריה אין הרשאה)
+    // Promise.all – מריץ את שלוש המחיקות במקביל ומחכה שכולן יסתיימו
+    await Promise.all(KINDS.map(function (kind) {
+      return deleteDoc(doc(db, 'users', user.uid, 'data', kind));
+    }));
+
+    // 4. מוחקים את החשבון עצמו. onAuthStateChanged יחזיר אותנו למסך הכניסה
+    accountJustDeleted = true;
+    await deleteUser(user);
+    closeDeleteDialog();
+  } catch (error) {
+    accountJustDeleted = false;
+    deleteConfirmBtn.disabled = false;
+    const messages = {
+      'auth/invalid-credential': 'הסיסמה שגויה.',
+      'auth/wrong-password': 'הסיסמה שגויה.',
+      'auth/too-many-requests': 'יותר מדי ניסיונות. חכה כמה דקות ונסה שוב.',
+      'auth/network-request-failed': 'אין חיבור לאינטרנט. בדוק את החיבור ונסה שוב.',
+    };
+    deleteError.textContent = messages[error.code] || 'המחיקה נכשלה. רענן את הדף ונסה שוב.';
+    deleteError.hidden = false;
+    // אם הספקנו להפסיק את הסנכרון אבל המחיקה נכשלה – מחזירים אותו
+    if (auth.currentUser && unsubscribers.length === 0) {
+      startSync(auth.currentUser);
+    }
+  }
+});
+
 // ----- הלב: מה מציגים לפי מצב ההתחברות -----
 // onAuthStateChanged רץ פעם אחת כשהדף נטען, ושוב בכל כניסה או יציאה.
 // Firebase זוכר משתמש מחובר גם אחרי סגירת הדפדפן – כך שלא צריך להתחבר כל פעם.
@@ -331,5 +419,9 @@ onAuthStateChanged(auth, function (user) {
     appRoot.hidden = true;
     authScreen.hidden = false;
     setMode('login');
+    if (accountJustDeleted) {
+      accountJustDeleted = false;
+      showSuccess('✅ החשבון וכל הנתונים שלו נמחקו.');
+    }
   }
 });
